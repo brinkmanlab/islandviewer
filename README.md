@@ -1,4 +1,4 @@
 islandviewer
 ============
 
-Perl library to run the IslandViwer backend
+Perl library to run the IslandViwer backend.
