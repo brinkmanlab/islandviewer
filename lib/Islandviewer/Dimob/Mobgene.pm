@@ -24,13 +24,16 @@
 
 =head1 LAST MAINTAINED
 
-    Nov 10, 2013
+    Apr 21, 2016
+    Claire Bertelli
+		Email: claire.bertelli@sfu.ca
 
 =cut
 
 package Islandviewer::Dimob::Mobgene;
 
 use strict;
+use warnings;
 use Moose;
 use Log::Log4perl qw(get_logger :nowarn);
 
@@ -124,9 +127,16 @@ sub parse_ptt {
     foreach my $pid (keys %{$ptt_table_hashref} ) {
 	my $product = $ptt_table_hashref->{$pid}->{'Product'};
 	if (   $product =~ /transposase/i
-	       || $product =~ /IstB-like/
-	       || $product =~ /insertion element 1/i
-	       || $product =~ /recombinase/i )
+	       || $product =~ /IstB/i
+	       || $product =~ /insertion element/i
+	       || $product =~ /recombinase/i
+	       || $product =~ /insertion sequence/i
+	       || $product =~ /resolvase/i
+	       || $product =~ /integrase/i
+	       || $product =~ /phage/i
+	       || $product =~ /transposon/i
+	       || $product =~ /transposable element/i
+	       )
 	{
 	    $mobgenes{$pid} = $product;
 	}
