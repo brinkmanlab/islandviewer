@@ -5,6 +5,7 @@ package Islandviewer::Dimob::tabdelimitedfiles;
 
 #a package containing some subroutines to deal with tabdelimited files
 use strict;
+use warnings;
 use Carp;
 our ( @ISA, @EXPORT, @EXPORT_OK );    
 use Exporter;
@@ -69,9 +70,9 @@ sub columns2hash {
 		my @content = split /\t/, $_;
 
 		#make sure that @content and @headers have the same number of elements
-		croak
-"the number of header elements do not match the number of content elements"
-		  if ( scalar(@headers) != scalar(@content) );
+		if ( scalar(@headers) != scalar(@content) ) {
+			croak "the number of header elements do not match the number of content elements";
+		}
 		my $i = 0;
 		foreach (@headers) {
 			push @{ $table_content{$_} }, $content[$i];
