@@ -25,13 +25,16 @@
 
 =head1 LAST MAINTAINED
 
-    Nov 10, 2013
+    Apr 21, 2016
+    Claire Bertelli
+		Email: claire.bertelli@sfu.ca
 
 =cut
 
 package Islandviewer::Dimob;
 
 use strict;
+use warnings;
 use Moose;
 use Log::Log4perl qw(get_logger :nowarn);
 use File::Temp qw/ :mktemp /;
@@ -193,20 +196,23 @@ sub run_dimob {
     }
 
     #calculate the mean and std deviation of the dinuc values
-    my $mean = cal_mean( \@dinuc_values );
+    my $median = cal_median( \@dinuc_values );
     my $sd   = cal_stddev( \@dinuc_values );
 
     #generate a list of dinuc islands with ffn fasta file def line as the hash key
-    my $gi_orfs = dinuc_islands( $dinuc_results, $mean, $sd, 8 );
+    my $gi_orfs = dinuc_islands( $dinuc_results, $median, $sd, 8 );
 
     #convert the def line to gi numbers (the data structure is maintained)
     my $extended = $self->{extended_ids} ? 1 : undef;
     my $dinuc_islands = defline2gi( $gi_orfs, "$filename.ptt", $extended );
 
+    # merge dinuc gis that are closer than a cutoff, by default 5kb
+    my $merged_islands = mergeClose_dinucIslands($dinuc_islands);
+
     #check the dinuc islands against the mobility gene list
     #any dinuc islands containing >=1 mobility gene are classified as
     #dimob islands
-    my $dimob_islands = dimob_islands( $dinuc_islands, $mob_list );
+    my $dimob_islands = dimob_islands( $merged_islands, $mob_list );
 
     my @gis;
     foreach (@$dimob_islands) {
@@ -221,8 +227,7 @@ sub run_dimob {
 	#my $start = $_->[0]{start};
 	#my $end = $_->[-1]{end};
  
-	#print "$start\t$end\n";
-    }
+	#print "$start\t$end\n";    }
 
     # And cleanup after ourself
     if($cfg->{clean_tmpfiles}) {
