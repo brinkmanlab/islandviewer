@@ -2,6 +2,7 @@ package Islandviewer::Dimob::genomicislands;
 #loosely associated subroutines for generating dinuc and dimob islands
 
 use strict;
+use warnings;
 use Bio::SeqIO;
 use Bio::Tools::SeqWords2;
 use File::Basename;
@@ -405,7 +406,7 @@ sub dinuc_islands {
 	}
 	shift @dinuc;    #remove the initial zero at the beginning of the array
 
-#here, we will only keep clusters of dinuc biased ORFs greater than the size cutoff
+	#here, we will only keep clusters of dinuc biased ORFs greater than the size cutoff
 	my @temp;
 	my @dinuc_abovecut;
 	my $count = 0;
@@ -413,10 +414,22 @@ sub dinuc_islands {
 
 	my $island_index = 0;
 	foreach my $element (@dinuc) {
-
-		#test if numbers in the array are consecutive
-		if ( ( $element + 1 ) == $dinuc[ $count + 1 ] ) {
-			push @temp, $element;
+		if ($element != $dinuc[-1]){
+			# test if numbers in the array are consecutive
+			if ( ( $element + 1 ) == $dinuc[ $count + 1 ] ) {
+				push @temp, $element;
+			}
+			else {
+				if ( scalar(@temp) >= $cutoff - 1 ) {
+					push @temp, $element;
+					push( @dinuc_abovecut, @temp );
+					@temp = ();
+				}
+				else {
+					@temp = ();
+				}
+			}
+			$count++;
 		}
 		else {
 			if ( scalar(@temp) >= $cutoff - 1 ) {
@@ -428,19 +441,35 @@ sub dinuc_islands {
 				@temp = ();
 			}
 		}
-		$count++;
 	}
-	for ( my $i == 0 ; $i <= scalar(@dinuc_abovecut) ; $i++ ) {
-		if ( ( $dinuc_abovecut[$i] ) + 1 == ( $dinuc_abovecut[ $i + 1 ] ) ) {
-			push @{ $islands[$island_index] },
-			  $ORFs_dinuc_array->[ $dinuc_abovecut[$i] ];
+
+	# We will merge regions of dinuc_abovecut that are less than 5 genes apart
+	# We do not export the last gene of each dinuc_abovecut as adding the last gene significantly
+	# diminishes precision more than it increases recall.
+	for ( my $i = 0 ; $i < (scalar(@dinuc_abovecut)-1) ; $i++ ) {
+		if ( ( $dinuc_abovecut[$i] + 1) == ( $dinuc_abovecut[ $i + 1 ] ) ) {
+			push @{ $islands[$island_index] }, $ORFs_dinuc_array->[ $dinuc_abovecut[$i]];
 		}
+		elsif ( ( $dinuc_abovecut[$i] + 6) >= ( $dinuc_abovecut[ $i + 1 ] ) ) {
+			my $dif = $dinuc_abovecut[ $i + 1 ]-$dinuc_abovecut[$i]-1;
+			for (my $j == 0; $j <= $dif; $j++ ) {
+				push @{ $islands[$island_index] }, $ORFs_dinuc_array->[ $dinuc_abovecut[$i]+$j];
+			}
+		}
+		#elsif (( $dinuc_abovecut[$i] ) == ( $dinuc_abovecut[ $i - 1 ]+1 ) ) {
+			#push @{ $islands[$island_index] }, $ORFs_dinuc_array->[ $dinuc_abovecut[$i] ];
+    #}
 		else {
 			$island_index++;
 		}
 	}
+	# We do not export the last gene of the last dinuc island for the same reasons as mentioned above
+	# push @{ $islands[$island_index] }, $ORFs_dinuc_array->[ $dinuc_abovecut[-1] ];
+
 	return \@islands;
 }
+
+
 
 sub dimob_islands {
 
@@ -450,7 +479,7 @@ sub dimob_islands {
 
 	my $dinuc_island_orfs = shift;
 	my $mobgenes          = shift;
-#	print Dumper $dinuc_island_orfs;
+	#	print Dumper $dinuc_island_orfs;
 	my @dimob_island_orfs;
 	
 	foreach my $island (@$dinuc_island_orfs){
@@ -549,4 +578,12 @@ sub cal_stddev {
 	$stat->add_data($input_array);
 	my $stddev = $stat->standard_deviation();
 	return $stddev;
+}
+
+sub cal_median {
+	my $input_array = shift;
+	my $stat = my $stat = Statistics::Descriptive::Full->new();
+	$stat->add_data($input_array);
+	my $median = $stat->median();
+	return $median;
 }
