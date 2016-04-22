@@ -533,8 +533,8 @@ sub defline2gi {
 				    #warn "Could not find pid";
 				}
 			}elsif ( $orf1 =~ /\|:c(\d+)-(\d+)\)/ ) {
-				$orf_start = $2;
-				$orf_end   = $1;
+				$orf_start = $1;
+				$orf_end   = $2;
 				my $coordinate = "$orf_start..$orf_end";
 				$pid = $ptt_table_hashref->{$coordinate}->{'PID'};
 				if($extended_ids) {
