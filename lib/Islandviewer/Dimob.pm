@@ -206,13 +206,10 @@ sub run_dimob {
     my $extended = $self->{extended_ids} ? 1 : undef;
     my $dinuc_islands = defline2gi( $gi_orfs, "$filename.ptt", $extended );
 
-    # merge dinuc gis that are closer than a cutoff, by default 5kb
-    my $merged_islands = mergeClose_dinucIslands($dinuc_islands);
-
     #check the dinuc islands against the mobility gene list
     #any dinuc islands containing >=1 mobility gene are classified as
     #dimob islands
-    my $dimob_islands = dimob_islands( $merged_islands, $mob_list );
+    my $dimob_islands = dimob_islands( $dinuc_islands, $mob_list );
 
     my @gis;
     foreach (@$dimob_islands) {
