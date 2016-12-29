@@ -435,7 +435,7 @@ sub submit_sets {
 	    if($block);
 
 	# Submit it to the scheduler
-	my $ret = $scheduler->submit($set, $cmd, $self->{workdir});
+	my $ret = $scheduler->submit("cvtree_$set", $cmd, $self->{workdir});
 
 	unless($ret) {
 	    $logger->error("Returned error from scheduler when trying to submit set $set");
