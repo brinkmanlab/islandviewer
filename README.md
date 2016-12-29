@@ -84,6 +84,10 @@ In the Islandviewer configuration file the scheduler is set by simply giving the
 
 Scheduler to submit a job to [MetaScheduler](https://github.com/lairdm/metascheduler-ui), a proprietary scheduler used in the Brinkman Lab for managing complex pipelines.
 
+## Islandviewer::Torque
+
+Mainly used for the Distance module in update runs, but can also be used in place of Islandviewer::MetaScheduler to submit jobs directly to Torque via qsub.
+
 ## Islandviewer::NullScheduler
 
 A simple fire-and-forget-it scheduler, takes the command given, and executes it as a detached system call. Always returns true.
