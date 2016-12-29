@@ -91,3 +91,27 @@ A simple fire-and-forget-it scheduler, takes the command given, and executes it 
 ## Islandviewer::DummyScheduler
 
 Designed for testing the frontend or any other package that talks to a running backend. It doesn't actually execute the command given, it just prints the command given and returns 1.
+
+# Updating pre-computed genomes
+
+Once the prereqs are installed and configured running an update should be straight forward.
+
+  bin/update_islandviewer.pl -c /data/Modules/iv-backend/islandviewer/etc/islandviewer.config --distance-only
+
+There are a number of options for tweeking the run
+
+--do-islandpick - If an update is being done and you want to have Islandviewer check if the available reference genomes may have changed, and rerun Islandpick if needed. This is for if a particular genome hasn't itself changed, but the genomes it might be compared against have changed through a MicrobeDB update.
+
+-- skip-distance - The distance run can be intensive to initialize, if you interrupted a run and are restarting after the Distance step, this is a good way to skip straight to Islandviewer analysis.
+
+--distance-only - Only run the Distance step for all genomes, useful for debugging or manual runs as the Distance step can be slow, sometimes you'll want to ensure it finished correctly before the actually Islandviewer runs are initialized.
+
+--update-only - Don't look for new genomes in MicrobeDB, only scan existing records we've run through Islandviewer before, useful with --do-islandpick for restarting failed runs.
+
+--distance-jobs - Defaults to 20, the number of pieces to split the Distance run in to, remember Distance is an all-against-all calculation.
+
+--distance-scheduler - The default is to use the Islandviewer::Torque scheduler to submit jobs to Torque directly. This isn't always ideal, particularly when doing local development. And of the other Islandviewer schedulers should work for distance runs.
+
+For example, if doing local development and you wanted to test the Distance phase only, and run the jobs linearly:
+
+  bin/update_islandviewer.pl -c /data/Modules/iv-backend/islandviewer/etc/islandviewer.config --distance-only --distance-scheduler 'Islandviewer::NullScheduler' --distance-jobs 1

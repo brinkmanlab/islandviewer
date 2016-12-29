@@ -36,12 +36,16 @@ my $logger;
 
 MAIN: {
     my $cfname; my $doislandpick; my $picker_obj;
-my $skip_distance; my $update_only; my $distance_only;
+    my $skip_distance; my $update_only; my $distance_only;
+    my $num_jobs = 200;
+    my $scheduler = 'Islandviewer::Torque';
     my $res = GetOptions("config=s" => \$cfname,
 			 "do-islandpick" => \$doislandpick,
                          "skip-distance" => \$skip_distance,
                          "update-only" => \$update_only,
                          "distance-only" => \$distance_only,
+                         "distance-jobs=s" => \$num_jobs,
+                         "distance-scheduler=s" => \$scheduler,
     );
 
     die "Error, no config file given"
@@ -94,7 +98,7 @@ my $skip_distance; my $update_only; my $distance_only;
 	    $logger->debug("Making workdir for cycle $cycle_num: $cycle_workdir");
 	    mkdir $cycle_workdir;
 
-	    my $dist_obj = Islandviewer::Distance->new({scheduler => 'Islandviewer::Torque', workdir => $cycle_workdir, num_jobs => 200, block => 1 });
+	    my $dist_obj = Islandviewer::Distance->new({scheduler => $scheduler, workdir => $cycle_workdir, num_jobs => $num_jobs, block => 1 });
 
 	    ($microbedb_ver,$sets_run) = $dist_obj->calculate_all();
 	};

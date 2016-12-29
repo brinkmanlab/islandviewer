@@ -129,8 +129,8 @@ sub build_and_submit {
 
     $logger->info("Submitting islandviewer script for $aid");
     
-    my $ret = 0;
-#    my $ret = system("sh $script_name&");
+#    my $ret = 0;
+    my $ret = system("sh $script_name&");
 
     if($ret) {
 	# Non-zero return value, bad...
