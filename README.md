@@ -62,7 +62,7 @@ A modified version of cvtree 4.2 is used which slightly changes the command line
 
 Ensure MicrobeDB is loaded and the [MicrobeDB V2 API](https://github.com/lairdm/microbedbv2-perl) is available. The API defaults to the database name `microbedb`, this can be overridden using the environment variable `MicrobeDB`
 
-  export MicrobeDB="microbedbv2
+  export MicrobeDB="microbedbv2"
 
 ## Zookeeper
 

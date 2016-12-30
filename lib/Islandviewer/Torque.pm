@@ -143,7 +143,8 @@ sub build_and_submit {
 
     $logger->debug("Changing cwd for call");
 
-    local $CWD = $workdir;
+    # Torque eccentricity
+    local $CWD = '/';
 
     my $script_name = "$workdir/islandviewer_job.sh";
 
