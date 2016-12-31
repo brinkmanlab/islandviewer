@@ -491,7 +491,7 @@ sub defline2gi {
 			my $orf_end;
 			my $pid;
 #			print "$orf1\n";
-			if ( $orf1 =~ /\|:(\d+)-(\d+)\)/ ) {
+			if ( $orf1 =~ /\|:(\d+)\.\.(\d+)\)/ ) {
 				$orf_start = $1;
 				$orf_end   = $2;
 					my $coordinate = "$orf_start..$orf_end";
@@ -503,7 +503,7 @@ sub defline2gi {
 				unless(defined($pid)){
 				    #warn "Could not find pid";
 				}
-			}elsif ( $orf1 =~ /\|:c(\d+)-(\d+)\)/ ) {
+			}elsif ( $orf1 =~ /\|:c(\d+)\.\.(\d+)\)/ ) {
 				$orf_start = $2;
 				$orf_end   = $1;
 				my $coordinate = "$orf_start..$orf_end";
