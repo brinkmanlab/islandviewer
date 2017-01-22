@@ -4,7 +4,7 @@
 
 =head1 DESCRIPTION
 
-    Object to calculate distance between replicons, depends on
+    Object to calculate distance between replicons using MASH, depends on
     MicrobeDB
 
 =head1 SYNOPSIS
@@ -14,20 +14,24 @@
     $dist = Islandviewer::Distance->new({scheduler => Islandviewer::Metascheduler});
     $dist->calculate_all(version => 73, custom_replicon => $repHash);
 
-    # Where $repHash->{$cid} = $filename # with .faa extension
+    # Where $repHash->{$cid} = $filename # with .fna extension
 
     $distance->add_replicon(cid => 2, version => 73);
 
 =head1 AUTHOR
 
+    Claire Bertelli
+    Email: claire.bertelli@sfu.ca
+    and
     Matthew Laird
+    Email: lairdm@sfu.ca
     Brinkman Laboratory
     Simon Fraser University
-    Email: lairdm@sfu.ca
+
 
 =head1 LAST MAINTAINED
 
-    Sept 25, 2013
+    Jan 21, 2017
 
 =cut
 
@@ -40,12 +44,13 @@ use File::Basename;
 use File::Spec;
 use File::Copy;
 use Log::Log4perl qw(get_logger :nowarn);
-use Data::UUID;
+#use Data::UUID;
 use Data::Dumper;
+use File::Temp qw/ :mktemp /;
+use File::Path qw(rmtree);
+use IO::File;
 
 use MicrobedbV2::Singleton;
-
-use Net::ZooKeeper::WatchdogQueue;
 
 use Islandviewer::Schema;
 use Islandviewer::GenomeUtils;
@@ -62,37 +67,45 @@ sub BUILD {
     $cfg_file = File::Spec->rel2abs(Islandviewer::Config->config_file);
 
     $logger = Log::Log4perl->get_logger;
+# TODO the scheduler part is probably not needed anymore - if so could remove from config?
+#    if($args->{scheduler}) {
+#	$self->{scheduler} = $args->{scheduler};
+#    } else {
+#	$self->{scheduler} = $cfg->{distance_scheduler};
+#    }
+# TODO What about num_jobs and block? probably not needed anymore as well
+#    $self->{num_jobs} = $args->{num_jobs};
 
-    if($args->{scheduler}) {
-	$self->{scheduler} = $args->{scheduler};
-    } else {
-	$self->{scheduler} = $cfg->{distance_scheduler};
-    }
-
-    $self->{num_jobs} = $args->{num_jobs};
-
-    $self->{block} = (defined($args->{block}) ? $args->{block} : 0);
+#    $self->{block} = (defined($args->{block}) ? $args->{block} : 0);
 
     $self->{microbedb_ver} = (defined($args->{microbedb_ver}) ?
 			      $args->{microbedb_ver} : undef );
 
     die "Error, work dir not specified:  $args->{workdir}"
-	unless( -d $args->{workdir} );
+		unless( -d $args->{workdir} );
     $self->{workdir} = $args->{workdir};
+
+	# check that we have the mash command and file in the config
+	die "Error, mash cmd and sketch not specified:  $cfg->{mash_cmd}"
+		unless( $cfg->{mash_cmd} );
+	$self->{mash_cmd} = $cfg->{mash_cmd};
+	$self->{mash_sketch} = $cfg->{mash_sketch};
 
     $self->{schema} = Islandviewer::Schema->connect($cfg->{dsn},
 					       $cfg->{dbuser},
 					       $cfg->{dbpass})
 	or die "Error, can't connect to Islandviewer via DBIx";
 
+	$self->{dist_table} = $cfg->{dist_table};
+
     # Save the args for later
     $self->{args} = $args;
 
     # Vocalize a little
     $logger->info("Initializing Islandviewer::Distance");
-    $logger->info("Using scheduler " . $self->{scheduler});
+#    $logger->info("Using scheduler " . $self->{scheduler});
     $logger->info("Using workdir " .  $self->{workdir});
-    $logger->info("Using num_jobs " . $self->{num_jobs}) if($self->{num_jobs});
+#    $logger->info("Using num_jobs " . $self->{num_jobs}) if($self->{num_jobs});
 
 }
 
@@ -103,7 +116,7 @@ sub run {
 
     $self->{accnum} = $accnum;
 
-    my $ret =  $self->add_replicon(cid => $accnum);
+	my $ret =  $self->add_replicon(cid => $accnum);
 
     if($ret) {
 	# Save how many distance attempts we've done vs how many
@@ -177,7 +190,7 @@ sub calculate_all {
     # Loop through the results and store them away
     while( my $curr_rep_obj = $rep_results->next() ) {
 	my $rep_accnum = $curr_rep_obj->rep_accnum . '.' . $curr_rep_obj->rep_version;
-	my $filename = $curr_rep_obj->get_filename('faa');
+	my $filename = $curr_rep_obj->get_filename('fna');
 
 	$replicon->{$rep_accnum} = $filename
 	    if($filename && $rep_accnum);
@@ -185,55 +198,346 @@ sub calculate_all {
 
     $logger->debug("Found " . scalar(keys %{$replicon}) . " replicons from microbedb");
 
-    # Once we have all the possible replicons let's build our set
-    # of pairs that need running
+    # Once we have all the possible replicons let's define the set of genomes we need to compare
     # if we're running a custom replicon set, use that for the
     # first sets in the pairs comparison
-    # and for future expansion we'll want to allow custom replicons to 
+    # and for future expansion we'll want to allow custom replicons to
     # run against each other....
-    my $runpairs; my $custom_vs_custom = 0;
+    my $runpairs; my $custom_vs_custom = 0; my $allvsall = 0; my $nbpairstorun;
     if($custom_rep) {
 	# If there's more than one custom replicon, we're
 	# running them against themselves
 	if(scalar(keys %{$custom_rep}) > 1) {
-	    $logger->debug("Running custom vs custom");
-	    $runpairs = $self->build_pairs($custom_rep, $custom_rep);
+	    $logger->info("Running custom vs custom");
+		$runpairs = $custom_rep;
+#	    $runpairs = $self->build_pairs($custom_rep, $custom_rep);
 	    $custom_vs_custom = 1;
+		$nbpairstorun = scalar(keys %{$custom_rep})*scalar(keys %{$custom_rep});
 	} else {
-	    # Otherwise we're just running a custom against
+		# If the custom genome is part of the update, we dont need to run the distance step because it was done before
+		$logger->info("Checking if this is an update or a custom genome");
+        my $isupdate = $self->check_if_update($custom_rep);
+		if ($isupdate == 1) {
+			$logger->info("This is an update - no need to calculate distances again");
+			return ($version, 1);
+		}
+	    # Otherwise we're just running a custom genome against
 	    # all the microbedb genomes
-	    $logger->debug("Running single custom genome vs microbedb");
-	    $runpairs = $self->build_pairs($custom_rep, $replicon)
+	    $logger->info("Running single custom genome vs microbedbv2");
+#	    $runpairs = $self->build_pairs($custom_rep, $replicon)
+		$runpairs = $custom_rep;
+		$nbpairstorun = scalar(keys %{$custom_rep})*scalar(keys %{$replicon});
 	}
     } else {
 	# Just a normal run, microbedb everything vs everything...
-	$runpairs = $self->build_pairs($replicon, $replicon);
+#	$runpairs = $self->build_pairs($replicon, $replicon);
+		$allvsall = 1;
+		$runpairs = $replicon;
+		$nbpairstorun = scalar(keys %{$replicon})*scalar(keys %{$replicon});
     }
 
-    $logger->debug("We have " . scalar(keys %{$runpairs}) . " pairs to run");
+    $logger->info("We have " . scalar(keys %{$runpairs}) . " replicons to run");
 
     # Remember the number of pairs we're wanting to run
     $self->{runnum} = scalar(keys %{$runpairs});
 
     # Why do all the rest if we have nothing to run
     if($self->{runnum} == 0) {
-	$logger->debug("Nothing to run, goodbye.");
+	$logger->info("Nothing to run, goodbye.");
 	return ($version, 0);
     }
 
-    if($custom_rep) {
-	($custom_vs_custom ? 
-	 $self->build_sets($runpairs, $custom_rep, $custom_rep)
-	 : $self->build_sets($runpairs, $custom_rep, $replicon));
-    } else {
-	$self->build_sets($runpairs, $replicon, $replicon);
-    }
+#    if($custom_rep) {
+#		($custom_vs_custom ?
+#		 $self->build_sets($runpairs, $custom_rep, $custom_rep)
+#		 : $self->build_sets($runpairs, $custom_rep, $replicon));
+#    } else {
+#		$self->build_sets($runpairs, $replicon, $replicon);
+#    }
 
-    $self->submit_sets($self->{block});
+
+	# We need a directory to store temporary genome files
+	my $tmp_dir = $self->_make_tempdir();
+
+	# define the standard mash file
+	my $mash_file = $self->{mash_sketch};
+
+	# We need to distinguish three cases:
+	# - we are doing an update and we need to replace the existing mash file.
+	# - we want to compare custom genomes between them and need a temporary mash sketch file
+	# - we want to compare a custom genome to the standard microbedbv2 genomes and we can use the existing mash sketch file
+	if ($allvsall==1) {
+		$logger->info("Building sketch from scratch");
+		my $tmp_mash_file = $self->build_sketch($runpairs, $tmp_dir);
+
+		# Copy the new reference sketch file to the standard location and test for success
+		my $cp_cmd = "cp " . $tmp_mash_file . " " . $mash_file;
+		system($cp_cmd);
+		die "Error, copying mash sketch file from $mash_file was not successfull"
+			unless( -f $mash_file );
+		$logger->info("The reference sketch was successfully built");
+	} elsif ($custom_vs_custom==1) {
+		# we have to build a new sketch for comparison between custom genomes
+		$logger->info("Need to add genomes to the sketch");
+		$mash_file = $self->build_sketch($runpairs, $tmp_dir);
+		# the combination of sketches with the reference sketch is not necessary if all genomes have already been processed
+		# through the pipeline, so commenting out this line for the moment
+		# $mash_file = $self->combine_sketch($mash_file);
+	} else {
+		# we need to have a pre-built sketch file
+		die "Error, mash sketch not found:  $cfg->{mash_sketch}"
+			unless( -f $cfg->{mash_sketch});
+
+		$logger->info("Simply comparing a custom genome to the sketch");
+		$self->prepare_files($runpairs, $tmp_dir);
+	}
+
+	$logger->info("Comparing genomes to sketch");
+	my $mash_results = $self->submit_mash($tmp_dir, $mash_file);
+	$logger->info("Parsing mash distance");
+	(my $distance_file, my $nbpairsobtained) = $self->parse_mash($mash_results);
+
+	my $ratiosuccess = $nbpairsobtained/$nbpairstorun;
+	$logger->info("Our rate of success for distance was $ratiosuccess");
+	if ($ratiosuccess != 1) {
+		$logger->error("The distance calculation failed");
+		die;
+	}
+
+	# now if we are building a new reference dataset from MicrobeDBv2, we need to remove all the old MicrobeDBv2 comparison
+    if ($allvsall==1) {
+		$self->remove_dist();
+	}
+
+	# Load the results in the database
+	$self->load_dist($distance_file);
+
+	# remove all temp data
+	$logger->trace("Cleaning up temp dir for Mash");
+	$self -> _remove_tmpdir($tmp_dir);
 
     # Return the version we used just for ease of use
-    return ($version, scalar(keys %{$runpairs}));
+    return ($version, $ratiosuccess);
 }
+
+# Function to check if a custom replicon is part of an islandviewer update
+sub check_if_update {
+	my $self = shift;
+	my $custom_rep = shift;
+
+	# Fetch the DBH
+	my $dbh = Islandviewer::DBISingleton->dbh;
+
+	# Check that if the replicon id is already in the database
+	my $repid = keys %{$custom_rep};
+	my $existingdistance = $dbh->do("SELECT COUNT(*) rep_accnum1 FROM $self->{dist_table} WHERE rep_accnum1=$repid") or
+		$logger->logdie("Error selecting lines" . $DBI::errstr);
+	$logger->info("There are already $existingdistance distance values for $repid in the database");
+
+	# By default this is a custom genome, but if the repid is already in the database, the distance step has ran already
+	# and this is an islandviewer update
+	my $isupdate = 0;
+	if ($existingdistance != 0){
+		$isupdate = 1;
+	}
+    return ($isupdate);
+}
+
+# Function to build a mash sketch to compare other genomes with
+sub build_sketch {
+	my $self = shift;
+    my $genome_set = shift;
+    my $tmp_dir = shift;
+
+	$self->prepare_files($genome_set, $tmp_dir);
+
+	# Now build the command and submit mash
+	$logger->info("Now building the sketch");
+	my $tmp_mash_file = $tmp_dir . "/mash_sketch_10000";
+	my $cmd = $self->{mash_cmd} . " sketch -s 10000 -o " . $tmp_mash_file . " " . $tmp_dir . "/" . "*.fna";
+
+	unless ( open( COMMAND, "$cmd |" ) ) {
+		$logger->logdie("Cannot run $cmd");
+	}
+
+	#Waits until the system call is done before saving to the array
+	my @stdout = <COMMAND>;
+	close(COMMAND);
+
+	# We need to update the name of the mash file, to add the extension used by mash
+	$tmp_mash_file = $tmp_mash_file . ".msh";
+	# Check that the temporary mash sketch file exists
+	die "Error, mash sketch file was not created:  $tmp_mash_file"
+		unless( -f $tmp_mash_file );
+
+	$logger->info("Finished building the sketch");
+
+	return $tmp_mash_file;
+}
+
+# function that copies the fna files to sketch/compare to the sketch to the temp directory and changes their name
+# to the entire accession.version number for ease of further processing
+sub prepare_files {
+	my $self = shift;
+	my $genome_set = shift;
+	my $tmp_dir = shift;
+
+	# Iterate through the genome_set, cp the file to the tmp
+	$logger->info("Copying files to tmp");
+
+	foreach my $acc (keys %{$genome_set}) {
+		my $genome_file = $genome_set->{$acc};
+		my $output_file = $tmp_dir . "/" . $acc . ".fna";
+		my $cp_cmd = "cp " . $genome_file . " " . $output_file ;
+		system($cp_cmd);
+		die "Error, file was not copied:  $output_file"
+			unless( -f $output_file );
+	}
+	$logger->info("Finished copying files to tmp");
+	return 1;
+}
+
+# function that combines the reference sketch and a temporary sketch, not used for now
+sub combine_sketch {
+	my $self = shift;
+	my $mash_file = shift;
+
+	my $combined_mash_file = $mash_file . "_combined";
+
+	my $cmd = $self->{mash_cmd} . " paste " . $combined_mash_file . " " . $self->{mash_sketch} . " " . $mash_file;
+
+	unless ( open( COMMAND, "$cmd |" ) ) {
+		$logger->logdie("Cannot run $cmd");
+	}
+
+	#Waits until the system call is done before saving to the array
+	my @stdout = <COMMAND>;
+	close(COMMAND);
+
+	return $combined_mash_file;
+}
+
+# function that does the comparison of genomes in the temp directory with a mash sketch file (.msh)
+sub submit_mash {
+	my $self = shift;
+	my $tmp_dir = shift;
+	my $mash_file = shift;
+
+	# We need a temporary file to store the results
+	my $mash_results = $tmp_dir . "/mash_distance.txt";
+	# Now build the command and submit it
+	my $cmd = $self->{mash_cmd} . " dist " . $mash_file . " " . $tmp_dir . "/*.fna > " . $mash_results;
+
+	unless ( open( COMMAND, "$cmd |" ) ) {
+		$logger->logdie("Cannot run $cmd");
+	}
+
+	#Waits until the system call is done before saving to the array
+	my @stdout = <COMMAND>;
+	close(COMMAND);
+
+	# Check that the result file is there
+	die "Error, mash results file was not created:  $mash_results"
+		unless( -f $mash_results );
+
+	return $mash_results;
+}
+
+# function that reads the mash result file and turns it into a three column table in the format of the Distance table
+sub parse_mash {
+	my $self = shift;
+	my $mash_results = shift;
+	my $formatted_results = $mash_results . "formatted.txt";
+
+	# We're going to read the mash_results file line by line, make the necessary substitution and
+	# write them to another file for upload
+	open(my $file_handle, '<', $mash_results) or die "Could not open '$mash_results' for reading $!";
+	open(my $outfile_handle, '>', $formatted_results) or die "Could not open '$formatted_results' for writing $!";
+	my $i = 0;
+	while ( my $line = <$file_handle> ) {
+		$line =~ s/^.+\/(\w+\.\d+)\.fna\t.+\/(\w+\.\d+)\.fna\t(\d+\.?\d*)\t.+/$1\t$2\t$3/g;
+		print $outfile_handle ($line);
+		$i++;
+	}
+	close($file_handle);
+	close($outfile_handle);
+
+	return ($formatted_results, $i);
+}
+
+# function to remove all existing distance between reference genomes in the previous update
+# (normally previous version of MicrobeDBv2). Used only in case of an update.
+sub remove_dist {
+	my $self = shift;
+
+	# Fetch the DBH
+	my $dbh = Islandviewer::DBISingleton->dbh;
+
+	$logger->info("Deleting previous MicrobeDBv2 distances");
+
+	# Delete the previous MicrobeDBv2 distances
+	$dbh->do("DELETE FROM $self->{dist_table} WHERE rep_accnum1 RLIKE '_' ") or
+		$logger->logdie("Error deleting previous MicrobeDBv2 distances" . $DBI::errstr);
+
+	$logger->info("Finished deleting previous MicrobeDBv2 distances");
+
+	return 1;
+}
+
+# function to load the mash distance into the Distance table
+sub load_dist {
+	my $self = shift;
+	my $results_file = shift;
+
+	die "Error, can't access results file $results_file"
+		unless( -f $results_file );
+
+	$logger->info("Loading distances");
+
+	# Fetch the DBH
+	my $dbh = Islandviewer::DBISingleton->dbh;
+
+	# Bulk load the results
+	$dbh->do("LOAD DATA LOCAL INFILE '$results_file' REPLACE INTO TABLE $self->{dist_table} FIELDS TERMINATED BY '\t' (rep_accnum1, rep_accnum2, distance)") or
+		$logger->logdie("Error loading $results_file:" . $DBI::errstr);
+
+	$logger->info("Finished loading distances");
+}
+
+sub _make_tempdir {
+	my $self = shift;
+
+	# Let's put the file in our workdir
+	my $tmp_dir = mkdtemp($self->{workdir} . "/mashtmpXXXXXXXXXX");
+
+	# And touch it to make sure it gets made
+	`touch $tmp_dir`;
+
+	return $tmp_dir;
+}
+
+sub _remove_tmpdir {
+	my $self = shift;
+	my $tmpdir = shift;
+
+	unless(rmtree $tmpdir) {
+		$logger->error("Can't remove directory $tmpdir: $!");
+	}
+}
+
+sub _remove_tmpdirarray {
+	my $self = shift;
+	my @tmpdir = @_;
+
+	foreach my $dir (@tmpdir) {
+		unless(rmtree $dir) {
+			$logger->error("Can't remove directory $dir: $!");
+		}
+	}
+}
+
+
+=begin GHOSTCODE
 
 sub build_pairs {
     my $self = shift;
@@ -332,6 +636,10 @@ sub build_sets {
 
 }
 
+=end GHOSTCODE
+
+=cut
+
 # Add the distance for a custom genome
 
 sub add_replicon {
@@ -361,25 +669,28 @@ sub add_replicon {
 
     # Filenames are just saved as basenames, check if the fasta version exists
 #    unless( -f "$filename.faa" ) {
-    unless( $formats->{faa} ) {
-	$logger->error("Error, can't find filename $filename.faa");
+    unless( $formats->{fna} ) {
+	$logger->error("Error, can't find filename $filename.fna");
 	return 0;
     }
 
     # We have a valid filename, lets toss it to calculate_all
     # pass along the specific microbedb version if we've
     # been given one
-    my $custom_rep->{$cid} = "$filename.faa";
+    my $custom_rep->{$cid} = "$filename.fna";
+	my $version; my $ratiosuccess;
     if($args{version}) {
-	$self->calculate_all(custom_replicon => $custom_rep,
+		($version, $ratiosuccess) = $self->calculate_all(custom_replicon => $custom_rep,
 			     version => $args{version});
     } else {
-	$self->calculate_all(custom_replicon => $custom_rep);
+		($version, $ratiosuccess) = $self->calculate_all(custom_replicon => $custom_rep);
     }
 
-    return 1;
+    return ($version, $ratiosuccess);
 
 }
+
+=begin GHOSTCODE
 
 # Submit the sets of cvtree jobs to the queue,
 # take a single boolean option on if we should
@@ -735,6 +1046,10 @@ sub lookup_pair {
     }
 }
 
+=end GHOSTCODE
+
+=cut
+
 sub set_version {
     my $self = shift;
     my $v = shift;
@@ -750,6 +1065,8 @@ sub set_version {
 
     return $v;
 }
+
+=begin GHOSTCODE
 
 # Fetch from the database how many runs we've done
 # and how many we attempted, this will be used to
@@ -830,5 +1147,9 @@ sub block_for_cvtree {
 
     return 1;
 }
+
+=end GHOSTCODE
+
+=cut
 
 1;

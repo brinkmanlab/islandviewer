@@ -36,7 +36,7 @@ my $logger;
 
 MAIN: {
     my $cfname; my $doislandpick; my $picker_obj;
-my $skip_distance; my $update_only; my $distance_only;
+    my $skip_distance; my $update_only; my $distance_only;
     my $res = GetOptions("config=s" => \$cfname,
 			 "do-islandpick" => \$doislandpick,
                          "skip-distance" => \$skip_distance,
@@ -78,6 +78,13 @@ my $skip_distance; my $update_only; my $distance_only;
     $port = $cfg->{tcp_port}
         if($cfg->{tcp_port});
 
+	if ( ! defined($skip_distance) ) {
+		my $sets_run;
+		my $dist_obj = Islandviewer::Distance->new({workdir => $base_work_dir});
+		($microbedb_ver,$sets_run) = $dist_obj->calculate_all();
+	}
+
+=begin GHOSTCODE
     my $sets_run;
     my $sets_run_last_cycle = 99999999;
     my $cycle_num = 1;
@@ -120,7 +127,8 @@ my $skip_distance; my $update_only; my $distance_only;
         # And incremenet the cycle for the next iteration
         $cycle_num++;
     }
-
+=end GHOSTCODE
+=cut
     if($distance_only) {
         $logger->info("Doing Distance only, exiting.");
         exit;
@@ -167,7 +175,8 @@ my $skip_distance; my $update_only; my $distance_only;
 			      MIN_GI_SIZE => 4000};
     $args->{Dimob} = {
 			      extended_ids => 1, MIN_GI_SIZE => 4000};
-    $args->{Distance} = {block => 1, scheduler => 'Islandviewer::NullScheduler'};
+	#TODO no need for these arguments anymore. Need testing that it works with commenting this line out.
+  #  $args->{Distance} = {block => 1, scheduler => 'Islandviewer::NullScheduler'};
     $args->{microbedb_ver} = $microbedb_ver;
     $args->{default_analysis} = 1;
     $args->{email} = 'lairdm@sfu.ca';
