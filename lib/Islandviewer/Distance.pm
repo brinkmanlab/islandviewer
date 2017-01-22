@@ -68,15 +68,15 @@ sub BUILD {
 
     $logger = Log::Log4perl->get_logger;
 # TODO the scheduler part is probably not needed anymore - if so could remove from config?
-#    if($args->{scheduler}) {
-#	$self->{scheduler} = $args->{scheduler};
-#    } else {
-#	$self->{scheduler} = $cfg->{distance_scheduler};
-#    }
+    if($args->{scheduler}) {
+	$self->{scheduler} = $args->{scheduler};
+    } else {
+	$self->{scheduler} = $cfg->{distance_scheduler};
+    }
 # TODO What about num_jobs and block? probably not needed anymore as well
-#    $self->{num_jobs} = $args->{num_jobs};
+    $self->{num_jobs} = $args->{num_jobs};
 
-#    $self->{block} = (defined($args->{block}) ? $args->{block} : 0);
+    $self->{block} = (defined($args->{block}) ? $args->{block} : 0);
 
     $self->{microbedb_ver} = (defined($args->{microbedb_ver}) ?
 			      $args->{microbedb_ver} : undef );
@@ -103,9 +103,9 @@ sub BUILD {
 
     # Vocalize a little
     $logger->info("Initializing Islandviewer::Distance");
-#    $logger->info("Using scheduler " . $self->{scheduler});
+    $logger->info("Using scheduler " . $self->{scheduler});
     $logger->info("Using workdir " .  $self->{workdir});
-#    $logger->info("Using num_jobs " . $self->{num_jobs}) if($self->{num_jobs});
+    $logger->info("Using num_jobs " . $self->{num_jobs}) if($self->{num_jobs});
 
 }
 
@@ -116,50 +116,55 @@ sub run {
 
     $self->{accnum} = $accnum;
 
-	my $ret =  $self->add_replicon(cid => $accnum);
+	(my $version, my $ratiosuccess) =  $self->add_replicon(cid => $accnum);
 
-    if($ret) {
+#    if($ret) {
 	# Save how many distance attempts we've done vs how many
 	# we've tried it.  Do it this way from the DB so the module
 	# is idempotent no matter how many times its rerun (vs.
 	# recording how many attempts we made this iterations and
 	# how many we think are currently possible)
-	my ($success, $failure) = $self->fetch_run_stats();
-	my $total = $success + $failure;
-	my $runnum = $self->{runnum};
+#	my ($success, $failure) = $self->fetch_run_stats();
+#	my $total = $success + $failure;
+#	my $runnum = $self->{runnum};
 
-	$self->{args}->{distances_calculated} = $success;
-	$self->{args}->{distances_attempted} = $total;
-	$self->{args}->{num_to_run} = $runnum;
+#	$self->{args}->{distances_calculated} = $success;
+#	$self->{args}->{distances_attempted} = $total;
+#	$self->{args}->{num_to_run} = $runnum;
+	$self->{args}->{ratiosuccess} = $ratiosuccess;
 	if($callback) {
 	    $callback->update_args($self->{args});
 	}
 
 	# Declare victory or failure.... 
 	# let's do some basic sanity testing....
-
+    if ($ratiosuccess != 1) {
+		$logger->error("Error, Mash distance step failed");
+		$callback->set_status("ERROR");
+		return 0;
+	}
 	# We'll allow for 5 complete failures, since these
 	# should never happen, if more than 5 just don't
 	# run in any way (no failure notice even), sound
 	# the alarm.
-	if($total < ($runnum - 5)) {
-	    $logger->error("Error, we thought there should be $runnum run but only $total ran");
-	    $callback->set_status("ERROR");
-	    return 0;
-	}
+#	if($total < ($runnum - 5)) {
+#	    $logger->error("Error, we thought there should be $runnum run but only $total ran");
+#	    $callback->set_status("ERROR");
+#	    return 0;
+#	}
 
 	# Require at least 85% of the runs are successful, if its higher than that,
 	# something odd is going on.
-	if(($success / $total) < 0.85) {
-	    $logger->error("Error, we ran $total jobs but only $success were successful, that's too low");
-	    $callback->set_status("ERROR");
-	    return 0;
-	}
-    } else {
-	$logger->error("We received a non-zero return value");
-    }
+#	if(($success / $total) < 0.85) {
+#	    $logger->error("Error, we ran $total jobs but only $success were successful, that's too low");
+#	    $callback->set_status("ERROR");
+#	    return 0;
+#	}
+#    } else {
+#	$logger->error("We received a non-zero return value");
+#    }
 
-    return $ret;
+    return 1;
 }
 
 sub calculate_all {
@@ -328,11 +333,16 @@ sub check_if_update {
 	# Fetch the DBH
 	my $dbh = Islandviewer::DBISingleton->dbh;
 
-	# Check that if the replicon id is already in the database
-	my $repid = keys %{$custom_rep};
-	my $existingdistance = $dbh->do("SELECT COUNT(*) rep_accnum1 FROM $self->{dist_table} WHERE rep_accnum1=$repid") or
-		$logger->logdie("Error selecting lines" . $DBI::errstr);
-	$logger->info("There are already $existingdistance distance values for $repid in the database");
+	# Check if the replicon id is already in the Distance table, it has been processed already
+	my $existingdistance;
+	foreach my $repid (keys %{$custom_rep}) {
+		print $repid;
+		my $sth = $dbh->prepare("SELECT COUNT(*) FROM $self->{dist_table} WHERE rep_accnum1=$repid") or
+			$logger->logdie("Error selecting lines" . $DBI::errstr);
+		$sth->execute();
+		$existingdistance = $sth->fetchrow_array;
+		$logger->info("There are already $existingdistance distance values for $repid in the database");
+	}
 
 	# By default this is a custom genome, but if the repid is already in the database, the distance step has ran already
 	# and this is an islandviewer update
@@ -455,7 +465,7 @@ sub parse_mash {
 	open(my $outfile_handle, '>', $formatted_results) or die "Could not open '$formatted_results' for writing $!";
 	my $i = 0;
 	while ( my $line = <$file_handle> ) {
-		$line =~ s/^.+\/(\w+\.\d+)\.fna\t.+\/(\w+\.\d+)\.fna\t(\d+\.?\d*)\t.+/$1\t$2\t$3/g;
+		$line =~ s/^.+\/([0-9A-Z\_\.]+)\.fna\t.+\/([0-9A-Z\_\.]+)\.fna\t(\d+\.?\d*[e\-0-9]*)\t.+/$2\t$1\t$3/g;
 		print $outfile_handle ($line);
 		$i++;
 	}
@@ -668,7 +678,7 @@ sub add_replicon {
     }
 
     # Filenames are just saved as basenames, check if the fasta version exists
-#    unless( -f "$filename.faa" ) {
+#    unless( -f "$filename.fna" ) {
     unless( $formats->{fna} ) {
 	$logger->error("Error, can't find filename $filename.fna");
 	return 0;
