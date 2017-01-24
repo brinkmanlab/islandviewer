@@ -5,7 +5,7 @@
 =head1 DESCRIPTION
 
     Object to calculate distance between replicons using MASH, depends on
-    MicrobeDB
+    MicrobeDBv2
 
 =head1 SYNOPSIS
 
@@ -44,7 +44,7 @@ use File::Basename;
 use File::Spec;
 use File::Copy;
 use Log::Log4perl qw(get_logger :nowarn);
-#use Data::UUID;
+use Data::UUID;
 use Data::Dumper;
 use File::Temp qw/ :mktemp /;
 use File::Path qw(rmtree);
@@ -87,7 +87,7 @@ sub BUILD {
 
 	# check that we have the mash command and file in the config
 	die "Error, mash cmd and sketch not specified:  $cfg->{mash_cmd}"
-		unless( $cfg->{mash_cmd} );
+		unless( $cfg->{mash_cmd} & $cfg->{mash_sketch} );
 	$self->{mash_cmd} = $cfg->{mash_cmd};
 	$self->{mash_sketch} = $cfg->{mash_sketch};
 
@@ -163,7 +163,7 @@ sub run {
 #    } else {
 #	$logger->error("We received a non-zero return value");
 #    }
-
+	$logger->info("Mash distance has been successfully completed");
     return 1;
 }
 
@@ -466,7 +466,12 @@ sub parse_mash {
 	my $i = 0;
 	while ( my $line = <$file_handle> ) {
 		$line =~ s/^.+\/([0-9A-Z\_\.]+)\.fna\t.+\/([0-9A-Z\_\.]+)\.fna\t(\d+\.?\d*[e\-0-9]*)\t.+/$2\t$1\t$3/g;
-		print $outfile_handle ($line);
+		# we will only keep distances between 0 and 0.3 to avoid storing unnecessary data
+		my($dist) = $line =~ /[0-9A-Z\_\.]+\t[0-9A-Z\_\.]+\t(\d+.?\d*)/;
+		$dist = $dist + 0;
+		if ( $dist <= 0.3) {
+			print $outfile_handle ($line);
+		}
 		$i++;
 	}
 	close($file_handle);
