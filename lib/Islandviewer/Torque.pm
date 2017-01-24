@@ -29,19 +29,21 @@
 package Islandviewer::Torque;
 
 use strict;
+use File::chdir;
 use Moose;
 use Log::Log4perl qw(get_logger :nowarn);
 use Cwd;
 
 use Islandviewer::Config;
 
-my $cfg; my $logger;
+my $cfg; my $cfg_file; my $logger;
 
 sub BUILD {
     my $self = shift;
     my $args = shift;
 
     $cfg = Islandviewer::Config->config;
+    $cfg_file = File::Spec->rel2abs(Islandviewer::Config->config_file);
 
     $logger = Log::Log4perl->get_logger;
 
@@ -57,7 +59,7 @@ sub submit {
     # Clean the paths a little since qsub doesn't like //
     $qsub_file =~ s/\/\//\//g;
 
-    $name = 'cvtree_' . $name;
+#    $name = 'cvtree_' . $name;
 
     # First let's make sure we have a work directory for qsub files
     mkdir "$workdir/qsub"
@@ -124,6 +126,65 @@ sub submit {
     }
 
     return 1;
+}
+
+# We're going to assume the modules come in the order they
+# should be executed.
+
+sub build_and_submit {
+    my $self = shift;
+    my $aid = shift;
+    my $job_type = shift;
+    my $workdir = shift;
+    my $args = shift;
+    my @modules = @_;
+
+    $logger->debug("Building linear job for analysis $aid");
+
+    $logger->debug("Changing cwd for call");
+
+    # Torque eccentricity
+    local $CWD = '/';
+
+    my $script_name = "$workdir/islandviewer_job.sh";
+
+    # Open the script for the set of commands
+    open(SCRIPT, ">$script_name")
+	or $logger->logdie("Error creating islandviewer run script $script_name for $aid, $@");
+
+    print SCRIPT "# Islandviewer job script for aid $aid\n\n";
+
+    # We need to set the environment variable for the 
+    # MicrobeDB API, so it knows what database to connect to
+    my $microbedb_database;
+    if($cfg->{microbedb}) {
+        $microbedb_database = $cfg->{microbedb};
+    } elsif($ENV{"MicrobeDBV2"}) {
+        $microbedb_database = $ENV{"MicrobeDBV2"};
+    } elsif($ENV{"MicrobeDB"}) {
+        $microbedb_database = $ENV{"MicrobeDB"};
+    }
+
+    if($microbedb_database) {
+        print SCRIPT "# Setting MicrobeDB database to use\n";
+        print SCRIPT "export MicrobeDB=\"$microbedb_database\"\n\n";
+    }
+
+    print SCRIPT "echo \"Starting analysis job $aid\"\n\n";
+
+    foreach my $component (@modules) {
+	my $cmd = $cfg->{component_runner} . " -c $cfg_file -a $aid -m $component";
+
+	print SCRIPT "echo \"Starting component $component, command: $cmd\"\n";
+	print SCRIPT "$cmd\n\n";
+    }
+
+    close SCRIPT;
+
+    $logger->info("Submitting islandviewer script via qsub for $aid");
+    
+    return $self->submit("${job_type}_$aid", $script_name, $workdir);
+
 }
 
 1;
