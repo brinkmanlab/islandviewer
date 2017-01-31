@@ -37,16 +37,12 @@ my $logger;
 MAIN: {
     my $cfname; my $doislandpick; my $picker_obj;
     my $skip_distance; my $update_only; my $distance_only;
-    my $num_jobs = 200;
-    my $scheduler = 'Islandviewer::Torque';
 
     my $res = GetOptions("config=s" => \$cfname,
 			 "do-islandpick" => \$doislandpick,
                          "skip-distance" => \$skip_distance,
                          "update-only" => \$update_only,
                          "distance-only" => \$distance_only,
-                         "distance-jobs=s" => \$num_jobs,
-                         "distance-scheduler=s" => \$scheduler,
     );
 
     die "Error, no config file given"
@@ -84,56 +80,11 @@ MAIN: {
         if($cfg->{tcp_port});
 
 	if ( ! defined($skip_distance) ) {
-		my $sets_run;
+		my $ratiosuccess;
 		my $dist_obj = Islandviewer::Distance->new({workdir => $base_work_dir});
-		($microbedb_ver,$sets_run) = $dist_obj->calculate_all();
+		($microbedb_ver,$ratiosucces) = $dist_obj->calculate_all();
 	}
 
-=begin GHOSTCODE
-    my $sets_run;
-    my $sets_run_last_cycle = 99999999;
-    my $cycle_num = 1;
-
-    # We're going to loop until we stop computing more distances,
-    # this will catch dying children that might cause some of our
-    # distances to not be caught
-    my $loop_inf = $skip_distance ? 0 : 1;
-    while($loop_inf) {
-	eval{
-	    # We need the trailing slash becauce the code that uses this expects
-	    # it, my bad...
-	    my $cycle_workdir =  catdir($base_work_dir, "cycle$cycle_num") . '/';
-	    $logger->debug("Making workdir for cycle $cycle_num: $cycle_workdir");
-	    mkdir $cycle_workdir;
-
-	    my $dist_obj = Islandviewer::Distance->new({scheduler => $scheduler, workdir => $cycle_workdir, num_jobs => $num_jobs, block => 1 });
-
-	    ($microbedb_ver,$sets_run) = $dist_obj->calculate_all();
-	};
-	if($@) {
-	    die "Error updating islandviewer in distance phase: $@";
-	}
-
-	if($sets_run == 0) {
-	    $logger->info("No sets to run, moving on...");
-	    last;
-	} elsif($sets_run < $sets_run_last_cycle) {
-	    $logger->info("We ran $sets_run this attempt, $sets_run_last_cycle last time");
-	} elsif($sets_run == $sets_run_last_cycle) {
-	    # This can either be if its stuck not getting more or if it hits zero
-	    $logger->info("We ran the same number of sets as last cycle ($sets_run), moving on...");
-	    last;
-	} else {
-	    $logger->logdie("Something really weird happened, this cycle: $sets_run, last cycle: $sets_run_last_cycle");
-	}
-
-	$sets_run_last_cycle = $sets_run;
-
-        # And incremenet the cycle for the next iteration
-        $cycle_num++;
-    }
-=end GHOSTCODE
-=cut
     if($distance_only) {
         $logger->info("Doing Distance only, exiting.");
         exit;
@@ -180,8 +131,6 @@ MAIN: {
 			      MIN_GI_SIZE => 4000};
     $args->{Dimob} = {
 			      extended_ids => 1, MIN_GI_SIZE => 4000};
-	#TODO no need for these arguments anymore. Need testing that it works with commenting this line out.
-  #  $args->{Distance} = {block => 1, scheduler => 'Islandviewer::NullScheduler'};
     $args->{microbedb_ver} = $microbedb_ver;
     $args->{default_analysis} = 1;
     $args->{email} = 'lairdm@sfu.ca';
