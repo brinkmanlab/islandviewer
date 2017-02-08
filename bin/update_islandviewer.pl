@@ -82,7 +82,7 @@ MAIN: {
 	if ( ! defined($skip_distance) ) {
 		my $ratiosuccess;
 		my $dist_obj = Islandviewer::Distance->new({workdir => $base_work_dir});
-		($microbedb_ver,$ratiosucces) = $dist_obj->calculate_all();
+		($microbedb_ver,$ratiosuccess) = $dist_obj->calculate_all();
 	}
 
     if($distance_only) {
