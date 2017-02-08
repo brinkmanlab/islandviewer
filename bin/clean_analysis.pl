@@ -173,7 +173,6 @@ sub purge_old_customgenome {
         }
 
         $dbh->do("DELETE FROM Distance WHERE rep_accnum1 = ? OR rep_accnum2 = ?", undef, $row[0], $row[0]);
-        $dbh->do("DELETE FROM DistanceAttempts WHERE rep_accnum1 = ? OR rep_accnum2 = ?", undef, $row[0], $row[0]);
         $dbh->do("DELETE FROM GC WHERE ext_id = ?", undef, $row[0]);
         $dbh->do("DELETE FROM Genes WHERE ext_id = ?", undef, $row[0]);
         $dbh->do("DELETE FROM CustomGenome WHERE cid = ?", undef, $row[0]);
