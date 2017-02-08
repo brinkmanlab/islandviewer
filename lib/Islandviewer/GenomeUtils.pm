@@ -874,7 +874,11 @@ sub correct_formats {
     my $formats = shift;
 
     my @formats = sort @{$formats};
-    my @expected_formats = sort(split(' ', $cfg->{expected_exts}));
+    my @expected_formats;
+    if('.embl' == $formats[0]) {
+        push @expected_formats, ".embl";
+    }
+    push @expected_formats, sort(split(' ', $cfg->{expected_exts}));
     $logger->trace("Checking formats, have [" . join(',', @formats) . '] need [' . join(',', @expected_formats) . ']');
     if(array_diff(@formats, @expected_formats ) ) {
 	$logger->warn("We don't have all the needed formats, have [" . join(',', @formats) . '] need [' . $cfg->{expected_exts} . ']');
@@ -888,7 +892,6 @@ sub find_file_types {
     my $self = shift;
     my $base_filename = shift;
     my $return_array = shift;
-
     unless($base_filename) {
 	$logger->trace("No base filename given in args, trying to use object default: " . $self->{base_filename});
 	$base_filename = $self->{base_filename};
@@ -907,17 +910,19 @@ sub find_file_types {
     }
 
 #    my $expected_formats = $self->parse_formats($cfg->{expected_exts});
-
+    
+    # Now find all the file formats that we currently have for a given genome
     my @formats;
-    foreach my $ext (@expected) {
-	# For each format we expect to find, does the file exist?
-	# And is non-zero
-	if(-f "$base_filename.$ext" &&
-	   -s "$base_filename.$ext") {
-	    push @formats, ".$ext";
-	}
+    my($filename, $dir) = fileparse($base_filename, qr/\/[^.]*/);
+    opendir(DIR, $dir) or die "Error opening directory $dir";
+    my @files = grep(/${filename}\.\w+$/, readdir(DIR));
+#    $logger->info("We have the following files: " . Dumper(@files));
+    foreach my $file (@files) {
+         my($file_suff, $file_dir, $ext) = fileparse($file, qr/\.[^.]*/);
+         push @formats, "$ext";
     }
-
+    closedir(DIR);
+    
     # If we've been asked to return it as an array rather 
     # than a string...
     if($return_array) {
