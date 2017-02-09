@@ -9,7 +9,6 @@ analysis_log = /home/lairdm/islandviewer/logs/analysis.log
 submit_log = /home/lairdm/islandviewer/logs/submit.log
 
 dist_table = iv4_distance
-dist_log_table=DistanceAttempts
 expected_exts=".gbk .fna .faa .ffn .ptt .embl"
 
 default_scheduler = Islandviwer::MetaScheduler
