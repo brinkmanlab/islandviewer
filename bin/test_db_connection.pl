@@ -34,10 +34,9 @@ MAIN: {
     my $dbh = Islandviewer::Schema->connect($cfg->{dsn},
                            $cfg->{dbuser},
                            $cfg->{dbpass})
-     or die "Error, can't connect to IslandViewer via DBIx";    
-#    my $dbh = DBI->connect($cfg->{dsn},
-#			   $cfg->{dbuser},
-#			   $cfg->{dbpass});
-#    die "Error: Unable to connect to the database: $DBI::errstr\n" if ! $dbh;
-    
+         or die "Error, can't connect to IslandViewer via DBIx";    
+
+    if ($dbh) {
+        print "Successfully connected to database\n";
+    }
 }
