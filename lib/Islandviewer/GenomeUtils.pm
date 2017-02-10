@@ -875,7 +875,7 @@ sub correct_formats {
 
     my @formats = sort @{$formats};
     my @expected_formats;
-    if('.embl' == $formats[0]) {
+    if('.embl' eq $formats[0]) {
         push @expected_formats, ".embl";
     }
     push @expected_formats, sort(split(' ', $cfg->{expected_exts}));
