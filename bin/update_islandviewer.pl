@@ -17,12 +17,13 @@ sub mypath { return $path; }
 };
 
 use lib "../lib";
-use lib "/home/lairdm/libs";
+#use lib "/home/lairdm/libs";
 use Islandviewer;
 use Islandviewer::Config;
 use Islandviewer::DBISingleton;
 use Islandviewer::Distance;
 use Islandviewer::Genome_Picker;
+use Data::Dumper;
 
 use MicrobedbV2::Singleton;
 
@@ -51,7 +52,7 @@ MAIN: {
     my $Islandviewer = Islandviewer->new({cfg_file => $cfname });
 
     my $cfg = Islandviewer::Config->config;
-
+   
     if($cfg->{logger_conf} && ( -r $cfg->{logger_conf})) {
 	Log::Log4perl::init($cfg->{logger_conf});
 	$logger = Log::Log4perl->get_logger;
@@ -73,17 +74,11 @@ MAIN: {
     }
     mkdir $base_work_dir;
 
-    $logger->info("Connecting to Islandviewer server $host:$port");
-    $host = $cfg->{daemon_host}
-        if($cfg->{daemon_host});
-    $port = $cfg->{tcp_port}
-        if($cfg->{tcp_port});
-
-	if ( ! defined($skip_distance) ) {
-		my $ratiosuccess;
-		my $dist_obj = Islandviewer::Distance->new({workdir => $base_work_dir});
-		($microbedb_ver,$ratiosuccess) = $dist_obj->calculate_all();
-	}
+    if ( ! defined($skip_distance) ) {
+        my $ratiosuccess;
+        my $dist_obj = Islandviewer::Distance->new({workdir => $base_work_dir});
+        ($microbedb_ver,$ratiosuccess) = $dist_obj->calculate_all();
+    }
 
     if($distance_only) {
         $logger->info("Doing Distance only, exiting.");
