@@ -20,7 +20,7 @@ sub mypath { return $path; }
 };
 
 use lib "../lib";
-use lib "/home/lairdm/libs";
+#use lib "/home/lairdm/libs";
 use Islandviewer;
 use Islandviewer::Config;
 use Islandviewer::DBISingleton;
@@ -32,9 +32,9 @@ my $microbedb_ver;
 my $logger;
 
 MAIN: {
-    my $cfname; my $doislandpick; my $picker_obj;
-my $skip_distance; my $update_only; my $distance_only;
-    my $res = GetOptions("config=s" => \$cfname,
+    my $cfname;
+    my $res = GetOptions(
+         "config=s" => \$cfname,
     );
 
     die "Error, no config file given"
@@ -70,7 +70,7 @@ my $skip_distance; my $update_only; my $distance_only;
 
     $find_analysis->execute();
 
-    my $transfer_obj = Islandviewer::AnnotationTransfer->new({microbedb_ver => 89, 
+    my $transfer_obj = Islandviewer::AnnotationTransfer->new({microbedb_ver => $microbedb_ver, 
 							   workdir => $cfg->{workdir} });
 
 
