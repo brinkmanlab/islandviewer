@@ -96,8 +96,10 @@ sub run {
     my $accnum = shift;
     my $callback = shift;
 
+    # remove annotations from virulence_mapped
     $self->clear_annotations($accnum);
-
+    
+    # Transfer genes in virulence table to virulence_mapped
     $self->transfer_curated($accnum);
 
     $self->{check_curated}->execute($accnum);
@@ -210,7 +212,7 @@ sub find_comparison_genomes {
     my $picker_obj = Islandviewer::Genome_Picker->new({workdir => $self->{workdir},
 						       microbedb_ver => $self->{microbedb_ver},
 						       MIN_CUTOFF => 0,
-						       MAX_CUTOFF => 0.3 });
+						       MAX_CUTOFF => 0.14 });
 
     my $dists = $picker_obj->find_distance_range($accnum);
 
