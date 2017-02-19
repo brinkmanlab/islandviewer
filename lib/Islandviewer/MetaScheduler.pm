@@ -135,7 +135,18 @@ sub create_qsub {
 	or $logger->logdie("Error creating qsub file $qsub_file: $@");
 
     print QSUB "# qsub file for Islandviewer\n\n";
-
+    
+    # We need to set the correct home environment to allow various IslandViewer 
+    # versions to run nicely alongside each other
+    
+    my $env_var = "";
+    if($cfg->{islandviewer_home}) {
+        my $ivhome = $cfg->{islandviewer_home};
+        print QSUB "# Setting islandviewer home directory\n";
+        #print QSUB "#PBS -V HOME=\"$ivhome\"\n\n";
+        $env_var = "HOME=\"$ivhome\" ";
+    }
+    
     # We need to set the environment variable for the 
     # MicrobeDB API, so it knows what database to connect to
     my $microbedb_database;
@@ -149,11 +160,21 @@ sub create_qsub {
 
     if($microbedb_database) {
         print QSUB "# Setting MicrobeDB database to use\n";
-        print QSUB "export MicrobeDB=\"$microbedb_database\"\n\n";
+        #print QSUB "#PBS -V MicrobeDB= \"$microbedb_database\"\n\n";
+        #print QSUB "export MicrobeDB=\"$microbedb_database\"\n\n";
+        $env_var .= "MicrobeDB=\"$microbedb_database\" ";
     }
-
-    print QSUB "echo \"Starting submission, command: $cmd\"\n";
-    print QSUB "$cmd\n";
+    
+    if($cfg->{microbedb_config}) {
+        my $microbedb_config = $cfg->{microbedb_config};
+        print QSUB "# Setting microbedb config file with credentials to use\n";
+        #print QSUB "#PBS -V MicrobeDB_config=\"$microbedb_config\"\n\n";
+        $env_var .= "MicrobeDB_config=\"$microbedb_config\" ";
+    }
+    
+    my $env_cmd = $env_var . $cmd; 
+    print QSUB "echo \"Starting submission, command: $env_cmd\"\n";
+    print QSUB "$env_cmd\n";
 
     close QSUB;
 }
