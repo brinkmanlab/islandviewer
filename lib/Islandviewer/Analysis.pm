@@ -483,6 +483,7 @@ sub run {
 
 sub generate_token {
     my $self = shift;
+    my $regenerate = shift;
 
     my $dbh = Islandviewer::DBISingleton->dbh;
 
@@ -491,8 +492,9 @@ sub generate_token {
     $fetch_analysis->execute($self->{aid});
 
     if(my @row = $fetch_analysis->fetchrow_array) {
-        if($row[1]) {
-            # Do we have an existing token? Yes, return it
+        if($row[1] && !$regenerate) {
+            # Do we have an existing token? Yes, return it unless we've been
+	    # asked to regenerate the token
             return $row[1];
         } else {
             # Nope? Generate one and save it
@@ -662,6 +664,9 @@ sub clone {
         $logger->debug("We've been told to demote the old analysis " . $self->{aid} . " from being the default");
         $dbh->do("UPDATE Analysis SET default_analysis = 0 WHERE aid = ?", undef, $self->{aid});
     }
+
+    # Regenerate the token, we don't sharethose anymore
+    $self->generate_token(1);
 
     # We could do this with triggers but we won't, see below.
     # Make the workdir for our analysis
