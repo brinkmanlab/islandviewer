@@ -484,12 +484,18 @@ sub run {
 sub generate_token {
     my $self = shift;
     my $regenerate = shift;
+    my $alt_aid = shift;
 
     my $dbh = Islandviewer::DBISingleton->dbh;
 
     my $fetch_analysis = $dbh->prepare("SELECT aid, token FROM Analysis WHERE aid = ?");
 
-    $fetch_analysis->execute($self->{aid});
+    my $token_aid = $self->{aid};
+
+    $token_aid = alt_aid
+	if($alt_aid);
+
+    $fetch_analysis->execute($token_aid);
 
     if(my @row = $fetch_analysis->fetchrow_array) {
         if($row[1] && !$regenerate) {
@@ -500,12 +506,12 @@ sub generate_token {
             # Nope? Generate one and save it
             my $token = Session::Token->new->get;
 
-            $dbh->do("UPDATE Analysis set token = ? WHERE aid = ?", undef, $token, $self->{aid});
+            $dbh->do("UPDATE Analysis set token = ? WHERE aid = ?", undef, $token, $token_aid);
             return $token;
         }
     } else {
         # We can't find our own record?  Very, very bad.
-        die "Error, can't find analysis id " . $self->{aid} . " when generating security token this is very bad.";
+        die "Error, can't find analysis id " . $token_aid . " when generating security token this is very bad.";
     }
 }
 
@@ -666,7 +672,7 @@ sub clone {
     }
 
     # Regenerate the token, we don't sharethose anymore
-    $self->generate_token(1);
+    $self->generate_token(1, $new_aid);
 
     # We could do this with triggers but we won't, see below.
     # Make the workdir for our analysis
