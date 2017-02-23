@@ -492,7 +492,7 @@ sub generate_token {
 
     my $token_aid = $self->{aid};
 
-    $token_aid = alt_aid
+    $token_aid = $alt_aid
 	if($alt_aid);
 
     $fetch_analysis->execute($token_aid);
