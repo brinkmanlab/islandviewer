@@ -158,7 +158,7 @@ sub purge_old_uploadgenome {
 sub purge_old_customgenome {
     my $dbh = Islandviewer::DBISingleton->dbh;
 
-    my $find_old_customgenome = $dbh->prepare("SELECT cid, filename from CustomGenome WHERE DATE_SUB(CURDATE(), INTERVAL $maxage DAY) >= submit_date");
+    my $find_old_customgenome = $dbh->prepare("SELECT DISTINCT c.cid, c.filename from CustomGenome c JOIN Analysis a ON c.cid=a.ext_id WHERE DATE_SUB(CURDATE(), INTERVAL $maxage DAY) >= c.submit_date AND a.atype=1");
 
     $find_old_customgenome->execute();
 
