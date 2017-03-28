@@ -23,7 +23,7 @@ sub mypath { return $path; }
 };
 
 use lib "../lib";
-use lib "/home/lairdm/libs";
+#use lib "/home/lairdm/libs";
 use Islandviewer;
 use Islandviewer::Config;
 use Islandviewer::DBISingleton;
