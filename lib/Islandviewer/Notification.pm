@@ -151,10 +151,10 @@ sub send_email {
 
     my $mailer = Mail::Mailer->new();
 
-    my $url = $cfg->{base_url} . 'results/' . $self->{aid} . '/';
+    my $url = $cfg->{base_url} . 'results/';
 
     my $token = $self->fetch_token();
-    $url .= "?token=$token" if $token;
+    $url .= "$token" if $token;
 
     eval {
 	$mailer->open({ From    => $cfg->{email_sender},
