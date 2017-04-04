@@ -101,7 +101,7 @@ sub fetchGenes {
 		    if($feature_obj->has_tag('protein_id')) {
 			my @protein_ids = $feature_obj->get_tag_values('protein_id');
 			for my $pid (@protein_ids) {
-			    if($pid =~ /^[A-Z][A-Z]_[\d.]/) {
+			    if($pid =~ /^[A-Z][A-Z][A-Z_][\d.]/) {
 				$protein_id = $pid;
 				$logger->trace("Found protein_id feature $pid");
 				last;
