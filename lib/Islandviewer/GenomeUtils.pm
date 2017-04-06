@@ -600,7 +600,7 @@ sub read_and_convert {
 # We really need to go back to square one and manage the files and
 # formats better. Or improve the analysis pieces so they share
 # formats... ugh. But for now, a tool to convert a genbank to embl
-# and vise versa. Mainly needed so Sigi can deal with MicrobeDB,
+# and vice versa. Mainly needed so Sigi can deal with MicrobeDB,
 # since Sigi needs Embl and we no longer generate it in MicrobeDB v2
 
 sub convert_file {
@@ -656,6 +656,13 @@ sub convert_file {
     }
 
     while ( my $seq = $in->next_seq() ) {
+
+        # we will remove here the contig annotations that cause errors during format conversion:
+        # - no sequence when converting from embl to gbk 
+        # - large error output when converting from gbk to embl the pseudochromosomes from the contigAligner
+        my $seq_annot = $seq->annotation;
+        $seq_annot->remove_Annotations('contig');
+        $seq->annotation($seq_annot);
 
 	#Create gbk or embl file
 	$out->write_seq($seq);
