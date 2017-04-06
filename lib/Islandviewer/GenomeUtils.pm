@@ -408,16 +408,17 @@ sub read_and_convert {
     my $in;
 
     if ( $extension =~ /embl/ ) {
-        # we're going to convert the embl into a gbk file first if it doesn't exist, then read the gbk file
+        # We're going to convert the embl into a gbk file first if it doesn't exist
         my $outfile = ($formats->{gbk} ? '/dev/null' : $file . '.gbk');
-        $self->convert_file("$file.embl",$outfile)
+        $self->convert_file("$file.embl",$outfile);
 	$logger->info("Converted embl to gbk for $filename.");
-
+        
+        # Now let's read the gbk file we've just created
         $in = Bio::SeqIO->new(
-            -file   => $filename,
+            -file   => "$file.gbk",
             -format => 'GENBANK'
             );
-        $logger->info("The genome sequence in $file.gbk as been read)
+        $logger->info("The genome sequence in $file.gbk as been read");
 
     } elsif ( ($extension =~ /gbk/) || ($extension =~ /gb/) ) {
 	# Special case, our general purpose code likes .gbk...
