@@ -389,7 +389,7 @@ sub read_and_convert {
     my $filename = shift;
     my $genome_name = (@_ ? shift : 'custom_genome');
 
-    #seperate extension from filename
+    #separate extension from filename
     $filename =~ s/\/\//\//g;
     my ( $file, $extension ) = $filename =~ /(.+)\.(\w+)/;
 
@@ -408,12 +408,18 @@ sub read_and_convert {
     my $in;
 
     if ( $extension =~ /embl/ ) {
+        # We're going to convert the embl into a gbk file first if it doesn't exist
+        my $outfile = ($formats->{gbk} ? '/dev/null' : $file . '.gbk');
+        $self->convert_file("$file.embl",$outfile);
+	$logger->info("Converted embl to gbk for $filename.");
+        
+        # Now let's read the gbk file we've just created
+        $in = Bio::SeqIO->new(
+            -file   => "$file.gbk",
+            -format => 'GENBANK'
+            );
+        $logger->info("The genome sequence in $file.gbk as been read");
 
-	$in = Bio::SeqIO->new(
-	    -file   => $filename,
-	    -format => 'EMBL'
-	    );
-	$logger->info("The genome sequence in $filename has been read.");
     } elsif ( ($extension =~ /gbk/) || ($extension =~ /gb/) ) {
 	# Special case, our general purpose code likes .gbk...
 	if($extension =~ /gb/) {
@@ -429,32 +435,7 @@ sub read_and_convert {
     } else {
 	$logger->logdie("Can't figure out if file is genbank (.gbk) or embl (.embl)");
     }
-
-    while ( my $seq = $in->next_seq() ) {
-	my $out;    
-
-	if ( $extension =~ /embl/ ) {
-	    my $outfile = ($formats->{gbk} ? '/dev/null' : $file . '.gbk');
-	    $out = Bio::SeqIO->new(
-		-file   => ">" . $outfile,
-		-format => 'GENBANK'
-		);
-	} elsif ( ($extension =~ /gbk/) || ($extension =~ /gb/) ) {
-            # This whole section needs a lot of cleanup, but for now
-            # we really don't NEED embl files except for Sigi and the Sigi
-            # module now generates a temporary embl file if needed. If we get
-            # embl files we convert them to genbank anyways. This makes the
-            # microbedb stuff easier, don't need write permission there.
-            my $outfile = '/dev/null';
-#	    my $outfile = ($formats->{embl} ? '/dev/null' : $file . '.embl');
-	    $out = Bio::SeqIO->new(
-		-file   => ">" . $outfile,
-		-format => 'EMBL'
-		);
-	} else {
-	    $logger->logdie("Can't figure out if file is genbank (.gbk) or embl (.embl)");
-	}
-
+    
 	my $outfile = ($formats->{faa} ? '/dev/null' : $file . '.faa');
 	my $faa_out = Bio::SeqIO->new(
 	    -file   => ">" . $outfile,
@@ -474,16 +455,13 @@ sub read_and_convert {
 	$outfile = ($formats->{ptt} ? '/dev/null' : $file . '.ptt');
 	open( my $PTT_OUT, '>', $outfile );
 
+    while ( my $seq = $in->next_seq() ) {
+	my $out;    
+
 	my $total_length = $seq->length();
 	my $total_seq    = $seq->seq();
 
 	my $success = 0;
-
-	#Create gbk or embl file
-	$success = $out->write_seq($seq);
-	if ($success == 0) {		
-	    $logger->error(".gbk or .embl file is not generated successfully.");
-	}
 
 	#Create fna file
 	$success = $fna_out->write_seq($seq);
@@ -601,38 +579,7 @@ sub read_and_convert {
 		);
 	    print $PTT_OUT join( "\t", @col ), "\n";
 
-	    #load annotation into microbedb
-#	    insert_record(
-#		'gene',
-#		{
-#		    version_id     => 0,
-#		    rpv_id         => $rpv_id,
-#		    gpv_id         => $gpv_id,
-#		    protein_accnum => $protein_accnum,
-#		    pid            => $gi,
-#		    gene_start     => $start,
-#		    gene_end       => $end,
-#		    gene_length    => $length,
-#		    gene_strand    => $strand_expand,
-#		    gene_name      => $gene_name,
-#		    locus_tag      => $locus_tag,
-#		    gene_product   => $product,
-#		    gene_seq       => $ffn_seq->seq(),
-#		    protein_seq    => $faa_seq->seq(),
-#		}
-#		);
 	}    #end of foreach
-
-#	update_record(
-#	    'replicon',
-#	    { rpv_id => $rpv_id },
-#	    {
-#		cds_num    => $num_proteins,
-#		rep_size   => $total_length,
-#		rep_seq    => $total_seq,
-#		file_types => '.gbk .fna .faa .ffn .ptt .embl',
-#	    }
-#	    );
 
 	# Save the details of the file we just loaded
 	$self->{name} = $genome_name;
@@ -645,8 +592,8 @@ sub read_and_convert {
 #	$self->{type} = 'custom';
 	$self->{genome_read} = 1;
 
-	close($PTT_OUT);
     }    #end of while
+    close($PTT_OUT);
     
 }    #end of gbk_or_embl_to_other_formats
 
@@ -654,7 +601,7 @@ sub read_and_convert {
 # We really need to go back to square one and manage the files and
 # formats better. Or improve the analysis pieces so they share
 # formats... ugh. But for now, a tool to convert a genbank to embl
-# and vise versa. Mainly needed so Sigi can deal with MicrobeDB,
+# and vice versa. Mainly needed so Sigi can deal with MicrobeDB,
 # since Sigi needs Embl and we no longer generate it in MicrobeDB v2
 
 sub convert_file {
@@ -700,16 +647,23 @@ sub convert_file {
             -format => 'EMBL'
             );
 
-    } elsif ( ($extension =~ /gbk/) || ($extension =~ /gb/) || ($extension =~ /gbff/) ) {
+    } elsif ( ($outextension =~ /gbk/) || ($outextension =~ /gb/) || ($outextension =~ /gbff/) ) {
         $out = Bio::SeqIO->new(
             -file   => ">" . $outfile,
             -format => 'GENBANK'
             );
     } else {
-        $logger->logdie("Can't figure out if file is genbank (.gbk) or embl (.embl)");
+        $logger->logdie("Can't figure out if outputfile is genbank (.gbk) or embl (.embl)");
     }
 
     while ( my $seq = $in->next_seq() ) {
+
+        # we will remove here the contig annotations that cause errors during format conversion:
+        # - no sequence when converting from embl to gbk 
+        # - large error output when converting from gbk to embl the pseudochromosomes from the contigAligner
+        my $seq_annot = $seq->annotation;
+        $seq_annot->remove_Annotations('contig');
+        $seq->annotation($seq_annot);
 
 	#Create gbk or embl file
 	$out->write_seq($seq);
