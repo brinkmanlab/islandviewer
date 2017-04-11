@@ -29,10 +29,11 @@ MAIN: {
     my $Islandviewer = Islandviewer->new({cfg_file => $cfname });
     my $cfg = Islandviewer::Config->config;
 
-    my $genome_obj = Islandviewer::Islandpick::GenomeUtils->new(
+    my $genome_obj = Islandviewer::GenomeUtils->new(
 	{ workdir => $workdir});
 
     $genome_obj->read_and_convert($filename, 'test_genome');
+    print "Successfully converted files";
 
     my $res = $genome_obj->insert_custom_genome();
     print "Result of insert: $res\n";
