@@ -96,6 +96,7 @@ sub purge_old_custom_analysis {
 
         # Remove all the db references
         $dbh->do("DELETE FROM IslandGenes WHERE gi IN (SELECT gi FROM GenomicIsland WHERE aid_id = ?)", undef, $aid);
+        $dbh->do("DELETE FROM Genes WHERE ext_id = ?", undef, $aid);
         $dbh->do("DELETE FROM GenomicIsland WHERE aid_id = ?", undef, $aid);
         $dbh->do("DELETE FROM GIAnalysisTask WHERE aid_id = ?", undef, $aid);
         $dbh->do("DELETE FROM Notification WHERE analysis_id = ?", undef, $aid);
@@ -174,7 +175,6 @@ sub purge_old_customgenome {
 
         $dbh->do("DELETE FROM Distance WHERE rep_accnum1 = ? OR rep_accnum2 = ?", undef, $row[0], $row[0]);
         $dbh->do("DELETE FROM GC WHERE ext_id = ?", undef, $row[0]);
-        $dbh->do("DELETE FROM Genes WHERE ext_id = ?", undef, $row[0]);
         $dbh->do("DELETE FROM CustomGenome WHERE cid = ?", undef, $row[0]);
     }
 }
