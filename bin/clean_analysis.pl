@@ -85,7 +85,8 @@ sub purge_old_custom_analysis {
         # - Remove the DB entries
 
         my $aid = $row[0];
-        $logger->info("Purging analysis $aid, ext_id " . $row[1]);
+        my $ext_id = $row[1];
+        $logger->info("Purging analysis $aid, ext_id $ext_id");
 
         my $full_path = Islandviewer::Config->expand_directory($row[2]);
 
@@ -96,7 +97,7 @@ sub purge_old_custom_analysis {
 
         # Remove all the db references
         $dbh->do("DELETE FROM IslandGenes WHERE gi IN (SELECT gi FROM GenomicIsland WHERE aid_id = ?)", undef, $aid);
-        $dbh->do("DELETE FROM Genes WHERE ext_id = ?", undef, $aid);
+        $dbh->do("DELETE FROM Genes WHERE ext_id = ?", undef, $ext_id);
         $dbh->do("DELETE FROM GenomicIsland WHERE aid_id = ?", undef, $aid);
         $dbh->do("DELETE FROM GIAnalysisTask WHERE aid_id = ?", undef, $aid);
         $dbh->do("DELETE FROM Notification WHERE analysis_id = ?", undef, $aid);
