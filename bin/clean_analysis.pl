@@ -62,9 +62,9 @@ MAIN: {
 
     $logger->info("Purging analysis older than $maxage days");
 
+    purge_old_customgenome();
     purge_old_custom_analysis();
     purge_old_uploadgenome();
-    purge_old_customgenome();
     purge_old_rerun_analysis();
 
     $logger->info("Done purge");
