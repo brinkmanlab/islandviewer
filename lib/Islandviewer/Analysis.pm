@@ -145,7 +145,7 @@ sub submit {
     if($args->{microbedb_ver} && $microbedb->fetch_version($args->{microbedb_ver})) {
 	$microbedb_ver = $args->{microbedb_ver}
     } else {
-	$microbedb_ver = $microbedb->latest();
+	$microbedb_ver = $microbedb->current();
     }
 
     # Submit the analysis!
