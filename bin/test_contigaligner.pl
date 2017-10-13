@@ -20,6 +20,8 @@ use Islandviewer::NullCallback;
 MAIN: {
     my $cfname; my $workdir; my $accnum; my $logger;
     my $ref_accnum; my $microbedb;
+    # accnum would here be the cid of a genome previously submitted to islandviewer
+    # (since microbedbv2 only retrieves complete genomes, it does not contain any draft genomes for testing)
     my $res = GetOptions("config=s"   => \$cfname,
 			 "microbedb=s" => \$microbedb,
 			 "ref_accnum=s" => \$ref_accnum,

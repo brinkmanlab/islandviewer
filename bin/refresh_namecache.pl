@@ -17,7 +17,7 @@ sub mypath { return $path; }
 };
 
 use lib "../lib";
-use lib "/home/lairdm/libs";
+#use lib "/home/lairdm/libs";
 use Islandviewer;
 use Islandviewer::Config;
 use Islandviewer::DBISingleton;
@@ -30,8 +30,7 @@ my $microbedb_ver;
 my $logger;
 
 MAIN: {
-    my $cfname; my $doislandpick; my $picker_obj;
-my $skip_distance; my $update_only; my $distance_only;
+    my $cfname;
     my $res = GetOptions("config=s" => \$cfname,
     );
 
@@ -61,7 +60,7 @@ my $skip_distance; my $update_only; my $distance_only;
     my $microbedb = MicrobedbV2::Singleton->fetch_schema;
 
     # What is the current version of microbedb?
-    $microbedb_ver = $microbedb->latest();
+    $microbedb_ver = $microbedb->current();
     $logger->info("Using microbedb version $microbedb_ver");
 
     my $find_names = $dbh->prepare("SELECT id, cid FROM NameCache WHERE isvalid = 1");

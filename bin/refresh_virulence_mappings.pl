@@ -63,7 +63,7 @@ MAIN: {
     my $microbedb = MicrobedbV2::Singleton->fetch_schema;
 
     # What is the current version of microbedb?
-    $microbedb_ver = $microbedb->latest();
+    $microbedb_ver = $microbedb->current();
     $logger->info("Using microbedb version $microbedb_ver");
 
     my $find_analysis = $dbh->prepare("SELECT ext_id FROM Analysis WHERE owner_id = 0 AND default_analysis = 1 AND status = 4 AND atype = 2");

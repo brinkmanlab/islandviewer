@@ -179,7 +179,7 @@ sub pick_genomes {
 
     # If we've been given a microbedb version AND its valid... 
     unless($args->{microbedb_version} && $microbedb->fetch_version($args->{microbedb_version})) {
-	$args->{microbedb_version} = $microbedb->latest();
+	$args->{microbedb_version} = $microbedb->current();
     }
 #    print Dumper $args;
 
@@ -414,7 +414,7 @@ sub submit_job {
     if($microbedb_ver && $microbedb->fetch_version($microbedb_ver)) {
 	$microbedb_ver = $microbedb_ver;
     } else {
-	$microbedb_ver = $microbedb->latest();
+	$microbedb_ver = $microbedb->current();
     }
 
     # Write out the genome file

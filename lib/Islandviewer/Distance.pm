@@ -546,8 +546,8 @@ sub set_version {
     # Create a Versions object to look up the correct version
     my $microbedb = MicrobedbV2::Singleton->fetch_schema;
 
-    # If we're not given a version, use the latest
-    $v = $microbedb->latest() unless($v);
+    # If we're not given a version, use the current
+    $v = $microbedb->current() unless($v);
 
     # Is our version valid?
     return 0 unless($microbedb->fetch_version($v));
