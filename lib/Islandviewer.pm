@@ -155,7 +155,7 @@ sub submit_analysis {
     if($args->{microbedb_ver} && $microbedb->fetch_version($args->{microbedb_ver})) {
 	$microbedb_ver = $args->{microbedb_ver}
     } else {
-	$microbedb_ver = $microbedb->latest();
+	$microbedb_ver = $microbedb->current();
     }
 
     my $genome_utils = Islandviewer::GenomeUtils->new({microbedb_ver => $microbedb_ver });

@@ -64,7 +64,7 @@ MAIN: {
     if($microbedb_ver && $microbedb->fetch_version($microbedb_ver)) {
 	$microbedb_ver = $microbedb_ver;
     } else {
-	$microbedb_ver = $microbedb->latest();
+	$microbedb_ver = $microbedb->current();
     }
 
     unless($microbedb_ver) {

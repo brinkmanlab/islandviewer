@@ -93,7 +93,7 @@ MAIN: {
 
         # Oh, we skipped doing the distance, that's ok, just grab the latest version
         if($skip_distance) {
-            $microbedb_ver = $microbedb->latest();
+            $microbedb_ver = $microbedb->current();
         } else {
             die "Error, this should never happen, we don't seem to have a valid microbedb version: $microbedb_ver";
         }

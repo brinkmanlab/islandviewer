@@ -65,7 +65,7 @@ sub BUILD {
 
     unless($self->{microbedb_ver}) {
 	my $microbedb = MicrobedbV2::Singleton->fetch_schema;
-	$self->{microbedb_ver} = $microbedb->latest();
+	$self->{microbedb_ver} = $microbedb->current();
 	
 	$logger->info("Microbedb version not defined, using latest: " . $self->{microbedb_ver})
     }
