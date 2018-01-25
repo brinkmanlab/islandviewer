@@ -335,7 +335,7 @@ sub submit_complete_job {
     if($args->{microbedb_ver} && $microbedb->fetch_version($args->{microbedb_ver})) {
 	$microbedb_ver = $microbedb_ver;
     } else {
-	$microbedb_ver = $microbedb->latest();
+	$microbedb_ver = $microbedb->current();
     }
 
     $logger->info("Submitting genome " . $args->{cid} . " for analysis");
