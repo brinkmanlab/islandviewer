@@ -91,7 +91,7 @@ MAIN: {
     unless($microbedb_ver) {
         $logger->warn("We don't have a microbedb version set, did we skip distance calculation?");
 
-        # Oh, we skipped doing the distance, that's ok, just grab the latest version
+        # Oh, we skipped doing the distance, that's ok, just grab the current version
         if($skip_distance) {
             $microbedb_ver = $microbedb->current();
         } else {

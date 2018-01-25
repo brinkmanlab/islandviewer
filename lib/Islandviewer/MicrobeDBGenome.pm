@@ -121,7 +121,7 @@ sub BUILD {
     # If we've been given a microbedb version AND its valid... 
     my $microbedb = MicrobedbV2::Singleton->fetch_schema;
     unless($args->{microbedb_ver} && $microbedb->fetch_version($args->{microbedb_ver})) {
-	$args->{microbedb_ver} = $microbedb->latest();
+	$args->{microbedb_ver} = $microbedb->current();
     }
 
     $self->{microbedb_ver} = $args->{microbedb_ver};

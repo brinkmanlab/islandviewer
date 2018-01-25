@@ -67,7 +67,7 @@ sub BUILD {
 	my $microbedb = MicrobedbV2::Singleton->fetch_schema;
 	$self->{microbedb_ver} = $microbedb->current();
 	
-	$logger->info("Microbedb version not defined, using latest: " . $self->{microbedb_ver})
+	$logger->info("Microbedb version not defined, using current: " . $self->{microbedb_ver})
     }
 
     $self->{ref_accnum} = (defined($args->{ref_accnum}) ?
