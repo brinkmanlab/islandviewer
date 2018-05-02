@@ -282,8 +282,8 @@ sub check_if_update {
 	my $existingdistance;
 	foreach my $repid (keys %{$custom_rep}) {
 		print $repid;
-		my $sth = $dbh->prepare("SELECT COUNT(*) FROM $self->{dist_table} WHERE rep_accnum1=$repid") or
-			$logger->logdie("Error selecting lines" . $DBI::errstr);
+		my $sth = $dbh->prepare("SELECT COUNT(*) FROM $self->{dist_table} WHERE rep_accnum1=?") or $logger->logdie("Error selecting lines" . $DBI::errstr);
+		$sth->bind_param(1,$repid);
 		$sth->execute();
 		$existingdistance = $sth->fetchrow_array;
 		$logger->info("There are already $existingdistance distance values for $repid in the database");
