@@ -63,8 +63,9 @@ MAIN: {
     $microbedb_ver = $microbedb->current();
     $logger->info("Using microbedb version $microbedb_ver");
 
-    my $find_names = $dbh->prepare("SELECT id, cid FROM NameCache WHERE isvalid = 1");
+    my $find_names = $dbh->prepare("SELECT id, cid FROM NameCache");
     my $invalidate_genome = $dbh->prepare("UPDATE NameCache SET isvalid = 0 WHERE id = ?");
+    my $validate_genome = $dbh->prepare("UPDATE NameCache SET isvalid = 1 WHERE id = ?");
 
     $find_names->execute();
 
@@ -86,6 +87,7 @@ MAIN: {
 
             if(-f "$base_file.gbk" && -f "$base_file.faa" && "$base_file.fna" && "$base_file.ptt") {
                 $logger->info("Found $cid, great!");
+                $validate_genome->execute($id);
                 next;
             } else {
                 $logger->error("We found a DB entry but not a file for $cid??? $base_file");
