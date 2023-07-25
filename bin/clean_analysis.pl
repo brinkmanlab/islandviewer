@@ -66,6 +66,7 @@ MAIN: {
     purge_old_custom_analysis();
     purge_old_uploadgenome();
     purge_old_rerun_analysis();
+    purge_orphan_customgenome();
 
     $logger->info("Done purge");
 
@@ -75,7 +76,7 @@ MAIN: {
 sub purge_old_custom_analysis {
     my $dbh = Islandviewer::DBISingleton->dbh;
 
-    my $find_old_custom = $dbh->prepare("SELECT aid, ext_id, workdir FROM Analysis WHERE atype = 1 AND owner_id != 0 AND DATE_SUB(CURDATE(), INTERVAL $maxage DAY) >= start_date");
+    my $find_old_custom = $dbh->prepare("SELECT aid, ext_id, workdir FROM Analysis WHERE atype = 1 AND owner_id != 0 AND (DATE_SUB(CURDATE(), INTERVAL $maxage DAY) >= start_date OR microbedb_ver != 107");
 
     $find_old_custom->execute();
 
@@ -92,7 +93,7 @@ sub purge_old_custom_analysis {
 
         if(-d $full_path) {
             $logger->info("Removing analysis path $full_path");
-	    remove_tree($full_path);
+	        remove_tree($full_path);
         }
 
         # Remove all the db references
@@ -178,4 +179,40 @@ sub purge_old_customgenome {
         $dbh->do("DELETE FROM GC WHERE ext_id = ?", undef, $row[0]);
         $dbh->do("DELETE FROM CustomGenome WHERE cid = ?", undef, $row[0]);
     }
+}
+
+# This subroutine deletes any CustomGenome entries that do not have an associated Analysis in the database. At some point the Analysis entries were deleted without
+# deleting the CustomGenome data associated with it, leaving them as CustomGenome 'orphans' that can take up a good chunk of space if not removed.
+sub purge_orphan_customgenome {
+
+    $logger->info("Purging orphan custom genomes...");
+
+    my $dbh = Islandviewer::DBISingleton->dbh;
+
+    my $find_customgenome = $dbh->prepare("SELECT DISTINCT cid, filename from CustomGenome WHERE DATE_SUB(CURDATE(), INTERVAL $maxage DAY) >= submit_date");
+    $find_customgenome->execute();
+
+    while (my @cg_row = $find_customgenome->fetchrow_array) {
+
+        my $find_analysis = $dbh->prepare("SELECT DISTINCT aid from Analysis where aid = ?", undef, $cg_row[0]);
+        $find_analysis->execute();
+
+
+        # If there is no returned results where Analysis.aid=CustomGenome.cid, then we have an orphan CustomGenome that should be deleted. 
+        if ($find_analysis->rows == 0) {
+            $logger->info("Purging orphan custome genome " . $cg_row[0]);
+
+            my $custom_path = $cfg->{custom_genomes} . '/' . $cg_row[0];
+            if(-d $custom_path) {
+                $logger->info("Removing orphan custom genome directory $custom_path");
+                remove_tree($custom_path);
+            }
+
+            $dbh->do("DELETE FROM Distance WHERE rep_accnum1 = ? OR rep_accnum2 = ?", undef, $cg_row[0], $cg_row[0]);
+            $dbh->do("DELETE FROM GC WHERE ext_id = ?", undef, $cg_row[0]);
+            $dbh->do("DELETE FROM CustomGenome WHERE cid = ?", undef, $cg_row[0]);
+        }
+    }
+
+    $logger->info("Finished purging orphan custom genomes!");
 }
