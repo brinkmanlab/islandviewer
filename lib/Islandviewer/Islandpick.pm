@@ -47,11 +47,11 @@ use Islandviewer::GenomeUtils;
 use MicrobedbV2::Singleton;
 
 #Bioperl
-use Bio::Tools::Run::StandAloneBlast;
-use Bio::SearchIO;
+#use Bio::Tools::Run::StandAloneBlast;
+#use Bio::SearchIO;
 use Bio::SeqIO;
-use Bio::Seq;
-use Bio::Range;
+#use Bio::Seq;
+#use Bio::Range;
 
 # local modules
 use Islandviewer::Mauve;
@@ -185,7 +185,30 @@ sub run_islandpick {
     unless(scalar(@comparison_genomes) > 0) {
 	$logger->debug("No comparison genomes given, using genome_picker");
 	my $picker_obj = Islandviewer::Genome_Picker->new({microbedb_version => $self->{microbedb_ver}});
-	my $results = $picker_obj->find_comparative_genomes($rep);
+
+    # This was historically part of 'find_comparative_genomes', but because we want to consider subsetting the candidates list,
+    # we pull the candidate list ahead of time for consideration (August 2023).
+    my $dists = $picker_obj->find_distance_range($rep);
+
+    my $final_binned_dists;
+    my $candidates_subset_threshold = 500;
+    # If there are more candidates then the threshold, then a subset of them will be used to prevent longer runtimes.
+    # Candidates will be sorted into bins (according to their distance values) and then a certain number of
+    # candidates from each bin will be taken (August 2023).
+    if (scalar(keys %{$dists}) > $candidates_subset_threshold) {
+
+        $logger->info("Selecting candidates using BOTTOM-UP BINNING");
+        $final_binned_dists = $self->bin_and_select_candidates($dists, $candidates_subset_threshold);
+    } else {
+        $logger->info("Less then " . $candidates_subset_threshold . " candidates - using all of them");
+        $final_binned_dists = $dists;
+    }
+
+    unless($final_binned_dists) {
+        $logger->debug("No final dists - terminating " . Dumper($final_binned_dists));
+    }
+
+    my $results = $picker_obj->find_comparative_genomes($rep, $final_binned_dists);
 
 	# Didn't get any results, return an empty set
 	unless($results) {
@@ -310,6 +333,126 @@ sub run_islandpick {
     # And we should have all the coordinates of the islands
     return @filtered_unique_regions;
 
+}
+
+# Since there are too many candidate genomes, a subset of them will be taken using a 'binning' approach.
+# Each candidate will be sorted into a bin that corresponds to it's distance value.
+# Once sorting is completed, an equal number of candidates from each bin will be selected.
+# It will first try to take a number of candidates equal to the number in the bin containing the fewest number of candidates.
+# If the number of selected candidates is fewer then the $candidates_subset_threshold, then the process will clear the selected
+# candidates and then try again with the number in the bin containing the next-fewest number of candidates,
+# continuing the process until the number of candidates selected surpasses $candidates_subset_threshold.
+# This whole process is called 'bottom-up binning and selection of candidates'.
+sub bin_and_select_candidates {
+    my $self = shift;
+    my $dists = shift;
+    my $candidates_subset_threshold = shift;
+    
+    # Distance values will be between $self->{MIN_CUTOFF} and $self->{MAX_CUTOFF}.
+    # 25 bins are created between 0 and the MAX_CUTOFF value.
+
+    my @bins = ();
+    my $binned_dists;
+    # Create the bins, starting at 0
+    my $bin_counter = 0;
+    my $bins_increment = $self->{MAX_CUTOFF}/25;
+    while ($bin_counter <= $self->{MAX_CUTOFF}) {
+        # Current bin is the same as the $bin_counter variable - add it to the $binned_dists hash and @bins array
+        $binned_dists->{$bin_counter} = {};
+        push(@bins, $bin_counter);
+        $bin_counter += $bins_increment;
+    }
+
+    $logger->info("Bins array: " . Dumper(\@bins));
+    $logger->info("Bins hash: " . Dumper($binned_dists));
+
+    # Iterate through every accession and assign it to the appropriate bin based on it's distance value.
+    foreach my $cur_accnum (keys %{$dists}) {
+        # Starting from the 'highest' bin (at time of writing, 0.215), compare the distance value
+        # to the bin value - if the distance value is greater then the bin value, it is added to the bin.
+        foreach my $bin (reverse @bins) {
+             if ($dists->{$cur_accnum} > $bin) {
+                 $binned_dists->{$bin}->{$cur_accnum} = $dists->{$cur_accnum};
+                 # Since it has been assigned to a bin, terminate the inner for loop and move onto the next accession.
+                 last;
+             }
+         }
+     }
+
+     $logger->info("Bins with accessions: " . Dumper($binned_dists));
+
+    # Now that accessions have been sorted into their bins, we want to find out how many accessions are in each bin before proceeding to candidate selection.
+    # First, create two hashes that are inversions of each other - one of {bin name}->{number of distances in bin}, and one of {number of distance in bin}->{bin name}.
+    # The goal of this is to make the 'number of candidates in bin' a key that can be used to access the actual candidate-containing bins.
+    my $remaining_binned_dist_counts;
+    my $remaining_binned_count_dists;
+    foreach my $bin_key (@bins) {
+        # Get the number of candidates in the bin
+        my $bin_hash = $binned_dists->{$bin_key};
+        my $bin_dist_count = scalar keys $bin_hash;
+
+        if ($bin_dist_count != 0) {
+            # Store count in a hash with the following format: {bin} -> {bin count}, eg: {0.175}->{42}
+            $remaining_binned_dist_counts->{$bin_key} = $bin_dist_count;
+            # Store bin in a hash with the following format: {bin count} -> {bin}, eg: {42}->{0.175}
+            $remaining_binned_count_dists->{$bin_dist_count} = $bin_key;
+        }
+    }
+    $logger->info("Remaining Binned Dist Counts: " . Dumper($remaining_binned_dist_counts));
+    $logger->info("Remaining Binned Count Dists (inversion of above hash): " . Dumper($remaining_binned_count_dists));
+
+    # Create an array ordered by highest number of distances.
+    my @sorted_bins_by_number_dists = sort {$a <=> $b} keys $remaining_binned_count_dists;
+    $logger->info("Sorted bins by number of dists (lowest to highest):" . Dumper(\@sorted_bins_by_number_dists));
+
+
+    # OK - we have sorted all candidates into bins, and created an array organized by 'number of distance values in bin'
+    # that starts with the bin containing the lowest non-zero number of distances.
+    # Now we proceed to 'bottom-up smart binning'
+
+    my $total_candidates = 0;
+    my $final_binned_dists;
+    # Because we are first going to try and remove a number of candidates from each bin equal to the number in the bin with the lowest number of candidates,
+    # the values in @sorted_bins_by_number_dists are thresholds, which is why each element is named $bin_max_num_candidates.
+    foreach my $bin_max_num_candidates (@sorted_bins_by_number_dists) {
+        $logger->info("Trying bottom-up filling with: " . $bin_max_num_candidates . " candidates taken from each bin");
+
+        # Now that we have the maximum number of candidates to try and take from each bin, we go ahead and do so.
+        # $bin_key would be equivalent to 0.175 here, based on the above example.
+        # For each bin...
+        foreach my $bin_key (keys %{$remaining_binned_dist_counts}) {
+
+            my $bin_count = 0;
+            # Select candidates from the bin (taken randomly because it is a Perl hash) until we hit $bin_max_num_candidates number of candidates.
+            foreach my $candidate_accession (keys %{$binned_dists->{$bin_key}}) {
+
+                # Add candidate to $final_binned_dists hash
+                $logger->info("Adding " . $candidate_accession . " " . $binned_dists->{$bin_key}->{$candidate_accession});
+                $final_binned_dists->{$candidate_accession} = $binned_dists->{$bin_key}->{$candidate_accession};
+
+                $total_candidates++;
+                $bin_count++;
+
+                # We have enough candidates from this bin - terminate the inner loop and move onto the next bin.
+                if ($bin_count >= $bin_max_num_candidates) {
+                    last;
+                }
+            }
+        }
+
+        # We have enough candidates - return $final_binned_dists
+        if ($total_candidates >= $candidates_subset_threshold) {
+            $logger->info("Found enough candidates - moving on.");
+            $logger->info("Final candidates list: " . Dumper($final_binned_dists));
+            $logger->info("Final candidates count: " . $total_candidates);
+            return $final_binned_dists;
+        } else {
+            # We do not have enough candidates - clear the $final_binned_dists data strcture and reset the $total_candidates counter to 0
+            $logger->info("Insufficient candidates - " . $total_candidates . ") - deleting: " . Dumper($final_binned_dists));
+            $total_candidates = 0;
+            %$final_binned_dists = ();
+        }
+    }
 }
 
 # We're going to parse the genbank file on the fly and look for

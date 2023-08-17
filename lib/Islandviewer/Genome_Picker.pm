@@ -94,15 +94,19 @@ sub clear_structures {
 sub find_comparative_genomes {
     my $self = shift;
     my $rep_accnum = shift;
+    my $dists = shift;
 
     $logger->debug("Finding comparative genomes for $rep_accnum using microbedb_ver " . $self->{microbedb_ver});
 
     # Clear internal structures before a run
     $self->clear_structures();
 
-    # First let's get all the genomes which meet our distance
+    # First, if we haven't done so already (August 2023),
+    # let's get all the genomes which meet our distance
     # criteria, we'll now have a hash matching that
-    my $dists = $self->find_distance_range($rep_accnum);
+    if (!$dists) {
+        $dists = $self->find_distance_range($rep_accnum);
+    }
 
     # Next let's find our own strain's name
     my $name = $self->find_name($rep_accnum);
@@ -211,6 +215,7 @@ sub find_comparative_genomes {
 	# If this one is picked, label it
 	if(defined($self->{picked}->{$cur_accnum})) {
 	    $result_genomes->{$cur_accnum}->{picked} = 1;
+        $logger->info("PICKED: " . $cur_accnum . " " . $self->{dist_set}->{$self->{primary_rep_accnum}}->{dists}->{$cur_accnum});
 	}
     }
 
